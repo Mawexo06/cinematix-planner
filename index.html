@@ -82,7 +82,7 @@ textarea{min-height:90px;resize:vertical}
   <div class="tabs">
     <div class="tab active" data-tab="calendar">Calendar</div>
     <div class="tab" data-tab="projects">Projects</div>
-    <div class="tab" data-tab="shots">VFX Shots</div>
+    <div class="tab" data-tab="shots">Shots</div>
     <div class="tab" data-tab="tasks">Tasks</div>
   </div>
 
@@ -119,7 +119,7 @@ textarea{min-height:90px;resize:vertical}
     <div id="projectsList" style="margin-top:10px"></div>
   </section>
 
-  <!-- SHOTS (VFX) -->
+  <!-- SHOTS -->
   <section id="tab-shots" style="display:none">
     <div class="card">
       <div class="row">
@@ -131,9 +131,11 @@ textarea{min-height:90px;resize:vertical}
           <option value="Final">Final</option>
         </select>
         <div class="space"></div>
+        <button class="btn" id="btnNewStoryboard">+ Storyboard</button>
         <button class="btn primary" id="btnNewShot">+ Shot</button>
       </div>
     </div>
+    <div id="storyboardsList" style="margin-top:10px"></div>
     <div id="shotsList" style="margin-top:10px"></div>
   </section>
 
@@ -187,7 +189,8 @@ function init(){
   s.projects = s.projects||[];
   s.events = s.events||[];
   s.tasks = s.tasks||[];
-  s.shots = s.shots||[]; // VFX shots
+  s.shots = s.shots||[]; // Shots
+  s.storyboards = s.storyboards||[];
   return s;
 }
 let store = init();
@@ -285,7 +288,7 @@ function openEventForm(existing){
   openModal(existing?'Edit Event':'New Event', (body)=>{
     body.append(formRow(`<div><div class="small">Title</div><input id="evTitle" value="${data.title}"></div>`));
     body.append(formRow(`<div><div class="small">Type</div><select id="evType">
-      ${['Shoot','Deadline','Review','Delivery','VFX'].map(t=>`<option ${data.type===t?'selected':''}>${t}</option>`).join('')}
+      ${['Shoot','Deadline','Review','Delivery','Shot'].map(t=>`<option ${data.type===t?'selected':''}>${t}</option>`).join('')}
     </select></div>`));
     body.append(formRow(`<div class="row"><div class="space"><div class="small">Date</div><input id="evDate" type="date" value="${data.date}"></div>
       <div class="space"><div class="small">Start</div><input id="evStart" type="time" value="${data.start}"></div>
@@ -352,8 +355,9 @@ function renderProjects(){
   </div>`).join('');
 }
 
-// ---------- VFX Shots ----------
+// ---------- Shots ----------
 $('#btnNewShot').onclick=()=>openShotForm();
+$('#btnNewStoryboard').onclick=()=>openStoryboardForm();
 $('#shotStatusFilter').addEventListener('change', renderShots);
 function openShotForm(existing){
   let s = existing || {id:uid(), projectId:'', sequence:'', scene:'', shot:'', vendor:'', status:'Bid', due:'', notes:''};
@@ -384,8 +388,96 @@ function openShotForm(existing){
     if(!existing) store.shots.push(s);
     save(store); closeModal(); renderShots();
   }, existing ? ()=>{ store.shots = store.shots.filter(x=>x.id!==existing.id); save(store); renderShots(); } : null);
-}
-function renderShots(){
+  }
+
+  function openStoryboardForm(existing){
+    let board = existing || {id:uid(), title:'', shots:[]};
+    openModal(existing?'Edit Storyboard':'New Storyboard', (body)=>{
+      body.append(formRow(`<div><div class="small">Title</div><input id="sbTitle" value="${board.title}"></div>`));
+      body.append(formRow(`<div id="sbShots" style="display:flex;flex-direction:column;gap:10px"></div>`));
+      body.append(formRow(`<button class="btn" type="button" id="sbAddShot">+ Add Shot</button>`));
+    }, async ()=>{
+      board.title = $('#sbTitle').value.trim();
+      const container = $('#sbShots');
+      const items = Array.from(container.querySelectorAll('.sbItem'));
+      board.shots = [];
+      for(const item of items){
+        const id = item.dataset.id || uid();
+        const seq = item.querySelector('.sbSeq').value.trim();
+        const scene = item.querySelector('.sbScene').value.trim();
+        const shot = item.querySelector('.sbShot').value.trim();
+        const camera = item.querySelector('.sbCamera').value.trim();
+        const notes = item.querySelector('.sbNotes').value.trim();
+        const file = item.querySelector('.sbImage').files[0];
+        let image = item.dataset.image || '';
+        if(file){
+          image = await new Promise(res=>{ const r=new FileReader(); r.onload=e=>res(e.target.result); r.readAsDataURL(file); });
+        }
+        board.shots.push({id, sequence:seq, scene, shot, camera, notes, image});
+        let sh = store.shots.find(x=>x.id===id);
+        if(!sh){ sh={id, projectId:'', sequence:seq, scene, shot, vendor:'', status:'Bid', due:'', notes}; store.shots.push(sh); }
+        else { Object.assign(sh,{sequence:seq, scene, shot, notes}); }
+      }
+      if(!existing) store.storyboards.push(board);
+      save(store); closeModal(); renderStoryboards(); renderShots();
+    }, existing ? ()=>{ store.storyboards = store.storyboards.filter(x=>x.id!==existing.id); save(store); renderStoryboards(); } : null);
+
+    const container = $('#sbShots');
+    function addShotRow(data){
+      const id = data?.id || uid();
+      const div = document.createElement('div');
+      div.className='card sbItem';
+      div.dataset.id = id;
+      div.dataset.image = data?.image||'';
+      div.innerHTML = `
+        <div class="row">
+          <div class="space"><input class="sbSeq" placeholder="Seq" value="${data?.sequence||''}"></div>
+          <div class="space"><input class="sbScene" placeholder="Scene" value="${data?.scene||''}"></div>
+          <div class="space"><input class="sbShot" placeholder="Shot" value="${data?.shot||''}"></div>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <div class="space"><input class="sbCamera" placeholder="Camera" value="${data?.camera||''}"></div>
+          <div class="space"><input class="sbImage" type="file" accept="image/*"></div>
+        </div>
+        ${data?.image?`<img src="${data.image}" style="width:100%;margin-top:6px">`:''}
+        <textarea class="sbNotes" placeholder="Notes" style="margin-top:6px">${data?.notes||''}</textarea>
+        <div class="row" style="margin-top:6px">
+          <button class="btn sbUp" type="button">↑</button>
+          <button class="btn sbDown" type="button">↓</button>
+          <div class="space"></div>
+          <button class="btn sbRemove" type="button">Remove</button>
+        </div>`;
+      container.appendChild(div);
+      div.querySelector('.sbUp').onclick=()=>{ if(div.previousElementSibling) container.insertBefore(div, div.previousElementSibling); };
+      div.querySelector('.sbDown').onclick=()=>{ if(div.nextElementSibling) container.insertBefore(div.nextElementSibling, div); };
+      div.querySelector('.sbRemove').onclick=()=>div.remove();
+    }
+    $('#sbAddShot').onclick=()=>addShotRow();
+    if(existing) existing.shots.forEach(addShotRow);
+  }
+
+  function renderStoryboards(){
+    const list = $('#storyboardsList'); list.innerHTML='';
+    if(!store.storyboards.length){ list.innerHTML='<div class="card small">No storyboards yet. Tap <b>+ Storyboard</b>.</div>'; return; }
+    list.innerHTML = store.storyboards.map(sb=>`
+      <div class="card">
+        <h3>${sb.title||'Storyboard'}</h3>
+        ${sb.shots.map(sh=>`
+          <div style="margin-top:8px">
+            ${sh.image?`<img src="${sh.image}" style="width:100%">`:''}
+            <div class="small">${sh.sequence||'SEQ'} / ${sh.scene||'SC'} / ${sh.shot||'SHOT'}${sh.camera?(' • Camera: '+sh.camera):''}</div>
+            <div class="small">${sh.notes||''}</div>
+          </div>
+        `).join('')}
+        <div class="row" style="margin-top:8px">
+          <button class="btn" onclick="openStoryboardForm(store.storyboards.find(x=>x.id==='${sb.id}'))">Edit</button>
+          <button class="btn" onclick="(function(){ store.storyboards=store.storyboards.filter(x=>x.id!=='${sb.id}'); save(store); renderStoryboards(); })()">Delete</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function renderShots(){
   const f = $('#shotStatusFilter').value;
   const list = $('#shotsList'); list.innerHTML='';
   let items = store.shots.slice().sort((a,b)=>(a.due||'').localeCompare(b.due||''));
@@ -481,7 +573,7 @@ $('#fileImport').addEventListener('change', (ev)=>{
 });
 
 // ---------- Render all ----------
-function render(){ renderCalendar(); renderProjects(); renderShots(); renderTasks(); }
+function render(){ renderCalendar(); renderProjects(); renderStoryboards(); renderShots(); renderTasks(); }
 function boot(){
   render();
   if('serviceWorker' in navigator){
