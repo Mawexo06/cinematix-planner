@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+<title>Cinematix Planner</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<style>
+:root{
+  --bg:#0b0f15; --panel:#0f141c; --card:#131a23; --line:#243244;
+  --text:#ecf2f8; --muted:#a3b5c7;
+  --accent:#49d3c6; --accent2:#7ca7ff; --accent3:#ed7a5f;
+  --ok:#22c55e; --warn:#f59e0b; --danger:#ef4444;
+}
+*{box-sizing:border-box} html,body{height:100%}
+body{margin:0;background:radial-gradient(1200px 600px at 50% -200px, #0f1724 0%, #0b0f15 55%), linear-gradient(180deg,#0b0f15 0,#0b0f15 100%);
+  color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased}
+.container{max-width:480px;margin:0 auto;padding:14px 14px calc(env(safe-area-inset-bottom) + 18px)}
+/* Top bar */
+header.top{position:sticky;top:0;z-index:20;background:rgba(11,15,21,.72);backdrop-filter:blur(10px);
+  border-bottom:1px solid rgba(255,255,255,.06); padding:10px 12px; display:flex; align-items:center; gap:10px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:900;letter-spacing:.3px}
+.logo .glyph{width:24px;height:24px;border-radius:8px;background:conic-gradient(from 0deg, var(--accent), var(--accent2), var(--accent3), var(--accent));
+  box-shadow:0 0 0 2px rgba(255,255,255,.1) inset}
+.btn{border:1px solid var(--line); background:linear-gradient(180deg,#131b25,#0f141c); color:var(--text); border-radius:12px; padding:10px 12px; font-weight:700}
+.btn.primary{background:linear-gradient(180deg, var(--accent), #2dad9e); color:#042e2a; border:none}
+.btn.ghost{background:transparent}
+/* Tabs */
+.tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0}
+.tab{padding:10px;text-align:center;border:1px solid var(--line);border-radius:12px;background:linear-gradient(180deg,#131b25,#0f141c);color:var(--muted);font-weight:800}
+.tab.active{background:linear-gradient(180deg,var(--accent),#2dad9e);color:#042e2a;border-color:transparent}
+/* Cards & layout */
+.card{background:linear-gradient(180deg,#151e29,#121923); border:1px solid var(--line); border-radius:18px; padding:12px; box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.section-title{font-weight:900;letter-spacing:.2px;margin:0 0 8px 0}
+.small{font-size:12px;color:var(--muted)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.space{flex:1}
+input,select,textarea{width:100%;background:#0d141c;color:var(--text);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:16px;outline:none}
+textarea{min-height:90px;resize:vertical}
+.badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:12px;border:1px solid var(--line);background:#0d141c}
+.badge.ok{border-color:#164a2b;background:#0b1e14;color:#9ee7b5}.badge.warn{border-color:#584114;background:#1f1605;color:#ffd89b}.badge.danger{border-color:#5a1a1a;background:#220a0a;color:#fecaca}
+/* Calendar */
+.calendar .head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.weekdays,.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.weekdays div{font-size:12px;color:var(--muted);text-align:center}
+.day{border:1px solid var(--line);border-radius:12px;min-height:78px;background:linear-gradient(180deg,#131b22,#0f141c);padding:8px;display:flex;flex-direction:column}
+.day .num{font-weight:900;opacity:.95;margin-bottom:8px}
+.day.other{opacity:.45}
+.day.today{outline:2px solid var(--accent2)}
+.chips{display:flex;gap:4px;flex-wrap:wrap}
+.chip{font-size:10px;font-weight:900;padding:2px 7px;border-radius:999px;color:#041e1b}
+.chip.shoot{background:var(--accent3)} .chip.deadline{background:var(--warn)} .chip.review{background:var(--accent2)} .chip.delivery{background:var(--danger)} .chip.vfx{background:var(--accent)}
+/* Lists */
+.item{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:start}
+.item+.item{margin-top:10px}
+.item h3{margin:0}
+.kicker{font-size:12px;color:var(--muted)}
+/* Fab */
+.fab{position:fixed;right:18px;bottom:calc(env(safe-area-inset-bottom) + 22px);z-index:40}
+.fab .btn{border-radius:999px;padding:14px 18px;box-shadow:0 10px 30px rgba(0,0,0,.3)}
+/* Modal */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:flex-end;z-index:50}
+.sheet{width:100%;max-width:520px;margin:0 auto;background:linear-gradient(180deg,#151e29,#111822);border-top-left-radius:16px;border-top-right-radius:16px;border:1px solid var(--line);padding:14px;box-shadow:0 -10px 30px rgba(0,0,0,.35)}
+.sheet .title{font-weight:900;margin:0 0 8px 0}
+.sheet .grid{display:grid;gap:10px}
+.footer{margin-top:14px;text-align:center;color:var(--muted);font-size:12px}
+@media (orientation:landscape){body::before{content:'Rotate to portrait for best experience';position:fixed;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.6);z-index:9999;color:#fff}}
+</style>
+</head>
+<body>
+<div class="container">
+  <header class="top">
+    <div class="logo"><div class="glyph"></div><div>Cinematix</div></div>
+    <div class="space"></div>
+    <button class="btn" id="btnExport">Export</button>
+    <button class="btn" id="btnImport">Import</button>
+    <input type="file" id="fileImport" accept="application/json" style="display:none">
+  </header>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="calendar">Calendar</div>
+    <div class="tab" data-tab="projects">Projects</div>
+    <div class="tab" data-tab="shots">VFX Shots</div>
+    <div class="tab" data-tab="tasks">Tasks</div>
+  </div>
+
+  <!-- CALENDAR -->
+  <section id="tab-calendar">
+    <div class="card calendar">
+      <div class="head">
+        <button class="btn" id="prevMonth">‹</button>
+        <div class="section-title" id="calTitle"></div>
+        <button class="btn" id="nextMonth">›</button>
+      </div>
+      <div class="weekdays" id="weekdays"></div>
+      <div class="cal" id="calGrid"></div>
+    </div>
+
+    <div class="card" style="margin-top:10px">
+      <div class="row">
+        <div class="section-title">Agenda</div>
+        <div class="space"></div>
+        <button class="btn primary" id="quickAddEvent">+ Event</button>
+      </div>
+      <div id="agenda"></div>
+    </div>
+  </section>
+
+  <!-- PROJECTS -->
+  <section id="tab-projects" style="display:none">
+    <div class="card">
+      <div class="row">
+        <input id="projSearch" placeholder="Search projects or clients">
+        <button class="btn primary" id="btnNewProject">+ Project</button>
+      </div>
+    </div>
+    <div id="projectsList" style="margin-top:10px"></div>
+  </section>
+
+  <!-- SHOTS (VFX) -->
+  <section id="tab-shots" style="display:none">
+    <div class="card">
+      <div class="row">
+        <select id="shotStatusFilter">
+          <option value="all">All</option>
+          <option value="Bid">Bid</option>
+          <option value="WIP">WIP</option>
+          <option value="Review">Review</option>
+          <option value="Final">Final</option>
+        </select>
+        <div class="space"></div>
+        <button class="btn primary" id="btnNewShot">+ Shot</button>
+      </div>
+    </div>
+    <div id="shotsList" style="margin-top:10px"></div>
+  </section>
+
+  <!-- TASKS -->
+  <section id="tab-tasks" style="display:none">
+    <div class="card">
+      <div class="row">
+        <select id="taskFilter">
+          <option value="all">All</option>
+          <option value="Open">Open</option>
+          <option value="In Progress">In Progress</option>
+          <option value="Blocked">Blocked</option>
+          <option value="Done">Done</option>
+        </select>
+        <div class="space"></div>
+        <button class="btn primary" id="btnNewTask">+ Task</button>
+      </div>
+    </div>
+    <div id="tasksList" style="margin-top:10px"></div>
+  </section>
+
+  <div class="footer">Offline‑ready • Add to Home Screen from Safari</div>
+</div>
+
+<!-- Floating add (contextual) -->
+<div class="fab"><button class="btn primary" id="fabAdd">+ Add</button></div>
+
+<!-- Modal sheet -->
+<div class="modal" id="modal">
+  <div class="sheet">
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <div class="title" id="modalTitle">New</div>
+      <button class="btn ghost" id="modalClose">Close</button>
+    </div>
+    <div class="grid" id="modalBody"></div>
+    <div class="row" style="margin-top:10px">
+      <div class="space"></div>
+      <button class="btn" id="modalDelete" style="display:none">Delete</button>
+      <button class="btn primary" id="modalSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ---------- Storage ----------
+const KEY='cinematix.v3';
+function load(){ try{return JSON.parse(localStorage.getItem(KEY)||'{}')}catch{return{}} }
+function save(s){ localStorage.setItem(KEY, JSON.stringify(s)); }
+function init(){
+  const s = load();
+  s.projects = s.projects||[];
+  s.events = s.events||[];
+  s.tasks = s.tasks||[];
+  s.shots = s.shots||[]; // VFX shots
+  return s;
+}
+let store = init();
+
+// ---------- Helpers ----------
+const $ = sel=>document.querySelector(sel);
+const $$ = sel=>Array.from(document.querySelectorAll(sel));
+function uid(){ return (crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2)); }
+function fmt(d){ return d?new Date(d).toLocaleDateString():''; }
+function formRow(html){ const d=document.createElement('div'); d.innerHTML=html; return d.firstElementChild; }
+function openModal(title, bodyBuilder, onSave, onDelete){
+  $('#modalTitle').textContent=title;
+  const body = $('#modalBody'); body.innerHTML=''; bodyBuilder(body);
+  $('#modal').style.display='flex';
+  $('#modalSave').onclick=()=>onSave();
+  if(onDelete){ $('#modalDelete').style.display=''; $('#modalDelete').onclick=()=>{onDelete(); closeModal();}; } else { $('#modalDelete').style.display='none'; }
+}
+function closeModal(){ $('#modal').style.display='none'; }
+$('#modal').addEventListener('click', e=>{ if(e.target.id==='modal') closeModal(); });
+$('#modalClose').addEventListener('click', closeModal);
+
+// ---------- Tabs ----------
+$$('.tab').forEach(t=>t.addEventListener('click',()=>{
+  $$('.tab').forEach(x=>x.classList.remove('active')); t.classList.add('active');
+  const tab = t.dataset.tab; $$('section[id^="tab-"]').forEach(s=>s.style.display='none'); $('#tab-'+tab).style.display='';
+  render();
+}));
+
+// ---------- Calendar ----------
+const WEEK = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+let currentMonth = new Date();
+$('#prevMonth').onclick=()=>{ currentMonth.setMonth(currentMonth.getMonth()-1); renderCalendar();};
+$('#nextMonth').onclick=()=>{ currentMonth.setMonth(currentMonth.getMonth()+1); renderCalendar();};
+
+function startOfMonth(d){ return new Date(d.getFullYear(), d.getMonth(), 1); }
+function endOfMonth(d){ return new Date(d.getFullYear(), d.getMonth()+1, 0); }
+function addDays(d,n){ const x=new Date(d); x.setDate(x.getDate()+n); return x; }
+function sameDay(a,b){ return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate(); }
+
+function renderCalendar(){
+  $('#calTitle').textContent = currentMonth.toLocaleString(undefined,{month:'long',year:'numeric'});
+  const w = $('#weekdays'); w.innerHTML=''; WEEK.forEach(d=>{const el=document.createElement('div'); el.textContent=d; w.appendChild(el)});
+  const grid = $('#calGrid'); grid.innerHTML='';
+  const first = startOfMonth(currentMonth), last = endOfMonth(currentMonth);
+  const offset = (first.getDay()+6)%7; const days = offset + last.getDate(); const rows = Math.ceil(days/7)*7;
+  const today = new Date();
+  for(let i=0;i<rows;i++){
+    const date = addDays(first, i-offset);
+    const ds = date.toISOString().slice(0,10);
+    const cell = document.createElement('div');
+    cell.className='day'+(date.getMonth()!==currentMonth.getMonth()?' other':'')+(sameDay(date,today)?' today':'');
+    const num = document.createElement('div'); num.className='num'; num.textContent=date.getDate(); cell.appendChild(num);
+    const chips = document.createElement('div'); chips.className='chips'; cell.appendChild(chips);
+    store.events.filter(e=>e.date===ds).slice(0,3).forEach(e=>{
+      const chip=document.createElement('div'); chip.className='chip '+e.type.toLowerCase(); chip.textContent=e.type; chips.appendChild(chip);
+      chip.addEventListener('click',()=>showAgenda(ds));
+    });
+    cell.addEventListener('click',()=>showAgenda(ds));
+    grid.appendChild(cell);
+  }
+  showAgenda(new Date().toISOString().slice(0,10));
+}
+
+function showAgenda(ds){
+  const wrap = $('#agenda');
+  const items = store.events.filter(e=>e.date===ds).sort((a,b)=>(a.start||'').localeCompare(b.start||''));
+  if(items.length===0){ wrap.innerHTML = `<div class="small">No events on ${new Date(ds).toDateString()}</div>`; return; }
+  wrap.innerHTML = items.map(e=>`
+    <div class="item card">
+      <div>
+        <h3>${e.title}</h3>
+        <div class="kicker">${e.type} • ${e.start||''}${e.end?'–'+e.end:''}${e.location?' • '+e.location:''}${e.projectId?' • Project: '+(store.projects.find(p=>p.id===e.projectId)?.title||'') : ''}</div>
+      </div>
+      <div class="row" style="flex-direction:column;gap:8px">
+        <button class="btn" onclick="editEvent('${e.id}')">Edit</button>
+        <button class="btn" onclick="removeEvent('${e.id}')">Delete</button>
+      </div>
+    </div>
+  `).join('');
+}
+$('#quickAddEvent').onclick=()=>openEventForm();
+
+function openEventForm(existing){
+  let data = existing || {id:uid(), title:'', type:'Shoot', date:new Date().toISOString().slice(0,10), start:'', end:'', location:'', projectId:''};
+  openModal(existing?'Edit Event':'New Event', (body)=>{
+    body.append(formRow(`<div><div class="small">Title</div><input id="evTitle" value="${data.title}"></div>`));
+    body.append(formRow(`<div><div class="small">Type</div><select id="evType">
+      ${['Shoot','Deadline','Review','Delivery','VFX'].map(t=>`<option ${data.type===t?'selected':''}>${t}</option>`).join('')}
+    </select></div>`));
+    body.append(formRow(`<div class="row"><div class="space"><div class="small">Date</div><input id="evDate" type="date" value="${data.date}"></div>
+      <div class="space"><div class="small">Start</div><input id="evStart" type="time" value="${data.start}"></div>
+      <div class="space"><div class="small">End</div><input id="evEnd" type="time" value="${data.end}"></div></div>`));
+    body.append(formRow(`<div><div class="small">Location</div><input id="evLoc" value="${data.location}"></div>`));
+    body.append(formRow(`<div><div class="small">Project</div><select id="evProj"><option value="">—</option>${store.projects.map(p=>`<option value="${p.id}" ${p.id===data.projectId?'selected':''}>${p.title}</option>`).join('')}</select></div>`));
+  }, ()=>{
+    data.title = $('#evTitle').value.trim()||'Untitled';
+    data.type = $('#evType').value;
+    data.date = $('#evDate').value;
+    data.start = $('#evStart').value;
+    data.end = $('#evEnd').value;
+    data.location = $('#evLoc').value;
+    data.projectId = $('#evProj').value;
+    if(!existing) store.events.push(data);
+    save(store); closeModal(); render();
+  }, existing ? ()=>{ store.events = store.events.filter(x=>x.id!==existing.id); save(store); render(); } : null);
+}
+function editEvent(id){ const e = store.events.find(x=>x.id===id); if(e) openEventForm(e); }
+function removeEvent(id){ store.events = store.events.filter(e=>e.id!==id); save(store); render(); }
+
+// ---------- Projects ----------
+$('#btnNewProject').onclick=()=>openProjectForm();
+$('#projSearch').addEventListener('input', renderProjects);
+function openProjectForm(existing){
+  let p = existing || {id:uid(), title:'', client:'', color:'#7ca7ff', due:'', notes:''};
+  openModal(existing?'Edit Project':'New Project', (body)=>{
+    body.append(formRow(`<div><div class="small">Title</div><input id="pTitle" value="${p.title}"></div>`));
+    body.append(formRow(`<div><div class="small">Client / Production</div><input id="pClient" value="${p.client}"></div>`));
+    body.append(formRow(`<div class="row"><div class="space"><div class="small">Color</div><input id="pColor" type="color" value="${p.color}"></div>
+      <div class="space"><div class="small">Due</div><input id="pDue" type="date" value="${p.due}"></div></div>`));
+    body.append(formRow(`<div><div class="small">Notes</div><textarea id="pNotes">${p.notes}</textarea></div>`));
+  }, ()=>{
+    p.title=$('#pTitle').value.trim()||'Untitled';
+    p.client=$('#pClient').value;
+    p.color=$('#pColor').value||'#7ca7ff';
+    p.due=$('#pDue').value;
+    p.notes=$('#pNotes').value;
+    if(!existing) store.projects.push(p);
+    save(store); closeModal(); renderProjects();
+  }, existing ? ()=>{ store.projects = store.projects.filter(x=>x.id!==existing.id); store.events = store.events.filter(e=>e.projectId!==existing.id); store.tasks = store.tasks.filter(t=>t.projectId!==existing.id); save(store); render(); } : null);
+}
+function renderProjects(){
+  const q = ($('#projSearch').value||'').toLowerCase();
+  const list = $('#projectsList'); list.innerHTML='';
+  const items = store.projects.filter(p=>!q || p.title.toLowerCase().includes(q) || (p.client||'').toLowerCase().includes(q))
+                              .sort((a,b)=>(a.due||'').localeCompare(b.due||''));
+  if(items.length===0){ list.innerHTML='<div class="card small">No projects yet. Tap <b>+ Project</b>.</div>'; return; }
+  list.innerHTML = items.map(p=>`<div class="item card">
+    <div>
+      <h3>${p.title}</h3>
+      <div class="kicker">${p.client||''}</div>
+      <div class="kicker">Due: ${p.due?fmt(p.due):'—'}</div>
+      <div class="row" style="margin-top:8px">
+        <span class="badge" style="border-color:${p.color};color:${p.color}">Project</span>
+        <button class="btn" onclick="openEventForm({id:'${p.id}', projectId:'${p.id}', title:'', type:'Shoot', date:'', start:'', end:'', location:''})">+ Event</button>
+        <button class="btn" onclick="openTaskForm({projectId:'${p.id}'})">+ Task</button>
+      </div>
+    </div>
+    <div class="row" style="flex-direction:column;gap:8px">
+      <button class="btn" onclick="openProjectForm(store.projects.find(x=>x.id==='${p.id}'))">Edit</button>
+      <button class="btn" onclick="(function(){ store.projects=store.projects.filter(x=>x.id!=='${p.id}'); store.events=store.events.filter(e=>e.projectId!=='${p.id}'); store.tasks=store.tasks.filter(t=>t.projectId!=='${p.id}'); save(store); render(); })()">Delete</button>
+    </div>
+  </div>`).join('');
+}
+
+// ---------- VFX Shots ----------
+$('#btnNewShot').onclick=()=>openShotForm();
+$('#shotStatusFilter').addEventListener('change', renderShots);
+function openShotForm(existing){
+  let s = existing || {id:uid(), projectId:'', sequence:'', scene:'', shot:'', vendor:'', status:'Bid', due:'', notes:''};
+  openModal(existing?'Edit Shot':'New Shot', (body)=>{
+    body.append(formRow(`<div class="row">
+      <div class="space"><div class="small">Project</div><select id="sProj"><option value="">—</option>${store.projects.map(p=>`<option value="${p.id}" ${p.id===s.projectId?'selected':''}>${p.title}</option>`).join('')}</select></div>
+      <div class="space"><div class="small">Status</div><select id="sStatus">${['Bid','WIP','Review','Final'].map(x=>`<option ${s.status===x?'selected':''}>${x}</option>`).join('')}</select></div>
+    </div>`));
+    body.append(formRow(`<div class="row">
+      <div class="space"><div class="small">Sequence</div><input id="sSeq" value="${s.sequence}"></div>
+      <div class="space"><div class="small">Scene</div><input id="sScene" value="${s.scene}"></div>
+      <div class="space"><div class="small">Shot</div><input id="sShot" value="${s.shot}"></div>
+    </div>`));
+    body.append(formRow(`<div class="row">
+      <div class="space"><div class="small">Vendor</div><input id="sVendor" value="${s.vendor}"></div>
+      <div class="space"><div class="small">Due</div><input id="sDue" type="date" value="${s.due}"></div>
+    </div>`));
+    body.append(formRow(`<div><div class="small">Notes</div><textarea id="sNotes">${s.notes}</textarea></div>`));
+  }, ()=>{
+    s.projectId = $('#sProj').value;
+    s.status = $('#sStatus').value;
+    s.sequence = $('#sSeq').value.trim();
+    s.scene = $('#sScene').value.trim();
+    s.shot = $('#sShot').value.trim();
+    s.vendor = $('#sVendor').value.trim();
+    s.due = $('#sDue').value;
+    s.notes = $('#sNotes').value;
+    if(!existing) store.shots.push(s);
+    save(store); closeModal(); renderShots();
+  }, existing ? ()=>{ store.shots = store.shots.filter(x=>x.id!==existing.id); save(store); renderShots(); } : null);
+}
+function renderShots(){
+  const f = $('#shotStatusFilter').value;
+  const list = $('#shotsList'); list.innerHTML='';
+  let items = store.shots.slice().sort((a,b)=>(a.due||'').localeCompare(b.due||''));
+  if(f!=='all') items = items.filter(s=> (s.status||'Bid')===f);
+  if(items.length===0){ list.innerHTML='<div class="card small">No shots yet. Tap <b>+ Shot</b>.</div>'; return; }
+  list.innerHTML = items.map(s=>{
+    const p = store.projects.find(x=>x.id===s.projectId);
+    const badgeClass = s.status==='Final'?'ok': (s.status==='Review'?'warn': (s.status==='WIP'?'':'danger'));
+    return `<div class="item card">
+      <div>
+        <h3>${s.sequence || 'SEQ'} / ${s.scene || 'SC'} / ${s.shot || 'SHOT'}</h3>
+        <div class="kicker">Status: ${s.status} • ${p?('Project: '+p.title+' • '):''}Vendor: ${s.vendor||'—'} • Due: ${s.due?fmt(s.due):'—'}</div>
+        <div class="small">${s.notes||''}</div>
+      </div>
+      <div class="row" style="flex-direction:column;gap:8px">
+        <button class="btn" onclick="openShotForm(store.shots.find(x=>x.id==='${s.id}'))">Edit</button>
+        <button class="btn" onclick="(function(){ store.shots=store.shots.filter(x=>x.id!=='${s.id}'); save(store); renderShots(); })()">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ---------- Tasks ----------
+$('#btnNewTask').onclick=()=>openTaskForm();
+$('#taskFilter').addEventListener('change', renderTasks);
+function openTaskForm(prefill){
+  let t = {id:uid(), projectId:prefill?.projectId||'', title:'', due:'', status:'Open', notes:''};
+  openModal('New Task', (body)=>{
+    body.append(formRow(`<div><div class="small">Title</div><input id="tTitle" value="${t.title}"></div>`));
+    body.append(formRow(`<div class="row"><div class="space"><div class="small">Project</div><select id="tProj"><option value="">—</option>${store.projects.map(p=>`<option value="${p.id}" ${p.id===t.projectId?'selected':''}>${p.title}</option>`).join('')}</select></div>
+      <div class="space"><div class="small">Due</div><input id="tDue" type="date" value="${t.due}"></div></div>`));
+    body.append(formRow(`<div class="row"><div class="space"><div class="small">Status</div><select id="tStatus">${['Open','In Progress','Blocked','Done'].map(x=>`<option>${x}</option>`).join('')}</select></div></div>`));
+    body.append(formRow(`<div><div class="small">Notes</div><textarea id="tNotes">${t.notes}</textarea></div>`));
+  }, ()=>{
+    t.title = $('#tTitle').value.trim()||'Untitled Task';
+    t.projectId = $('#tProj').value;
+    t.due = $('#tDue').value;
+    t.status = $('#tStatus').value;
+    t.notes = $('#tNotes').value;
+    store.tasks.push(t); save(store); closeModal(); renderTasks();
+  });
+}
+function renderTasks(){
+  const f = $('#taskFilter').value;
+  const list = $('#tasksList'); list.innerHTML='';
+  let items = store.tasks.slice().sort((a,b)=>(a.due||'').localeCompare(b.due||''));
+  if(f!=='all') items = items.filter(t=> (t.status||'Open')===f);
+  if(items.length===0){ list.innerHTML='<div class="card small">No tasks yet. Tap <b>+ Task</b>.</div>'; return; }
+  list.innerHTML = items.map(t=>{
+    const p = store.projects.find(x=>x.id===t.projectId);
+    return `<div class="item card">
+      <div>
+        <h3>${t.title}</h3>
+        <div class="kicker">${p?('Project: '+p.title+' • '):''}Due: ${t.due?fmt(t.due):'—'} • ${t.status}</div>
+        <div class="small">${t.notes||''}</div>
+      </div>
+      <div class="row" style="flex-direction:column;gap:8px">
+        <button class="btn" onclick="(function(id){ const tt=store.tasks.find(x=>x.id===id); if(!tt) return; openModal('Edit Task', (b)=>{
+          b.append(formRow('<div><div class=small>Title</div><input id=tTitle value="'+tt.title+'"></div>'));
+          b.append(formRow('<div class=row><div class=space><div class=small>Project</div><select id=tProj><option value="">—</option>'+store.projects.map(p=>'<option value="'+p.id+'" '+(p.id===tt.projectId?'selected':'')+'>'+p.title+'</option>').join('')+'</select></div><div class=space><div class=small>Due</div><input id=tDue type=date value="'+(tt.due||'')+'"></div></div>'));
+          b.append(formRow('<div class=row><div class=space><div class=small>Status</div><select id=tStatus>'+['Open','In Progress','Blocked','Done'].map(x=>'<option '+(tt.status===x?'selected':'')+'>'+x+'</option>').join('')+'</select></div></div>'));
+          b.append(formRow('<div><div class=small>Notes</div><textarea id=tNotes>'+ (tt.notes||'') +'</textarea></div>'));
+        }, ()=>{ tt.title=$('#tTitle').value; tt.projectId=$('#tProj').value; tt.due=$('#tDue').value; tt.status=$('#tStatus').value; tt.notes=$('#tNotes').value; save(store); closeModal(); renderTasks(); }, ()=>{ store.tasks=store.tasks.filter(x=>x.id!==id); save(store); renderTasks(); }); })('${t.id}')">Edit</button>
+        <button class="btn" onclick="(store.tasks=store.tasks.filter(x=>x.id!=='${t.id}'), save(store), renderTasks())">Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ---------- FAB behavior ----------
+$('#fabAdd').onclick=()=>{
+  const active = document.querySelector('.tab.active')?.dataset.tab;
+  if(active==='calendar') openEventForm();
+  else if(active==='projects') openProjectForm();
+  else if(active==='shots') openShotForm();
+  else openTaskForm();
+};
+
+// ---------- Import / Export ----------
+$('#btnExport').onclick=()=>{
+  const data = JSON.stringify(store, null, 2);
+  const blob = new Blob([data], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download='cinematix-backup.json'; a.click();
+  URL.revokeObjectURL(url);
+};
+$('#btnImport').onclick=()=>$('#fileImport').click();
+$('#fileImport').addEventListener('change', (ev)=>{
+  const file = ev.target.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{ try{ store = JSON.parse(reader.result); save(store); render(); } catch{ alert('Invalid file'); } };
+  reader.readAsText(file); ev.target.value='';
+});
+
+// ---------- Render all ----------
+function render(){ renderCalendar(); renderProjects(); renderShots(); renderTasks(); }
+function boot(){
+  render();
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', ()=> navigator.serviceWorker.register('./sw.js').catch(console.error));
+  }
+}
+boot();
+</script>
+</body>
+</html>
