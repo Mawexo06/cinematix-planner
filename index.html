@@ -30,7 +30,7 @@ header.top{position:sticky;top:env(safe-area-inset-top);z-index:20;background:rg
 .btn.primary{background:linear-gradient(180deg, var(--accent), #2dad9e); color:#042e2a; border:none}
 .btn.ghost{background:transparent}
 /* Tabs */
-.tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0}
+.tabs{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:10px 0}
 .tab{padding:10px;text-align:center;border:1px solid var(--line);border-radius:12px;background:linear-gradient(180deg,#131b25,#0f141c);color:var(--muted);font-weight:800}
 .tab.active{background:linear-gradient(180deg,var(--accent),#2dad9e);color:#042e2a;border-color:transparent}
 /* Cards & layout */
@@ -52,7 +52,7 @@ textarea{min-height:90px;resize:vertical}
 .day.today{outline:2px solid var(--accent2)}
 .chips{display:flex;gap:4px;flex-wrap:wrap}
 .chip{font-size:10px;font-weight:900;padding:2px 7px;border-radius:999px;color:#041e1b}
-.chip.shoot{background:var(--accent3)} .chip.deadline{background:var(--warn)} .chip.review{background:var(--accent2)} .chip.delivery{background:var(--danger)} .chip.vfx{background:var(--accent)}
+.chip.shoot{background:var(--accent3)} .chip.deadline{background:var(--warn)} .chip.review{background:var(--accent2)} .chip.delivery{background:var(--danger)} .chip.shot{background:var(--accent)}
 /* Lists */
 .item{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:start}
 .item+.item{margin-top:10px}
@@ -82,6 +82,7 @@ textarea{min-height:90px;resize:vertical}
     <div class="tab" data-tab="projects">Projects</div>
     <div class="tab" data-tab="shots">Shots</div>
     <div class="tab" data-tab="tasks">Tasks</div>
+    <div class="tab" data-tab="notes">Notes</div>
   </div>
 
   <!-- CALENDAR -->
@@ -154,6 +155,17 @@ textarea{min-height:90px;resize:vertical}
     </div>
     <div id="tasksList" style="margin-top:10px"></div>
   </section>
+  <!-- NOTES -->
+  <section id="tab-notes" style="display:none">
+    <div class="card">
+      <div class="row">
+        <select id="noteFilter"><option value="all">All</option></select>
+        <div class="space"></div>
+        <button class="btn primary" id="btnNewNote">+ Note</button>
+      </div>
+    </div>
+    <div id="notesList" style="margin-top:10px"></div>
+  </section>
 
   <div class="footer">Offline‑ready • Add to Home Screen from Safari</div>
 </div>
@@ -186,6 +198,7 @@ function init(){
   s.tasks = s.tasks||[];
   s.shots = s.shots||[]; // Shots
   s.storyboards = s.storyboards||[];
+  s.notes = s.notes||[];
   return s;
 }
 let store = init();
@@ -196,6 +209,26 @@ const $$ = sel=>Array.from(document.querySelectorAll(sel));
 function uid(){ return (crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2)); }
 function fmt(d){ return d?new Date(d).toLocaleDateString():''; }
 function formRow(html){ const d=document.createElement('div'); d.innerHTML=html; return d.firstElementChild; }
+function getLabel(type,id){
+  if(type==='project') return store.projects.find(p=>p.id===id)?.title||'Project';
+  if(type==='shot'){ const s=store.shots.find(x=>x.id===id); return s?`${s.sequence||'SEQ'} / ${s.scene||'SC'} / ${s.shot||'SHOT'}`:'Shot'; }
+  if(type==='task') return store.tasks.find(t=>t.id===id)?.title||'Task';
+  if(type==='event') return store.events.find(e=>e.id===id)?.title||'Event';
+  if(type==='date') return id;
+  return type;
+}
+function renderNoteText(txt){
+  return txt
+    .replace(/\[\[(\w+):([^\]]+)\]\]/g,(m,type,id)=>`<span class="badge" onclick="openLinked('${type}','${id}')">${getLabel(type,id)}</span>`)
+    .replace(/\n/g,'<br>');
+}
+function openLinked(type,id){
+  if(type==='project'){ $('.tab[data-tab="projects"]').click(); openProjectForm(store.projects.find(x=>x.id===id)); }
+  else if(type==='shot'){ $('.tab[data-tab="shots"]').click(); openShotForm(store.shots.find(x=>x.id===id)); }
+  else if(type==='task'){ $('.tab[data-tab="tasks"]').click(); editTask(id); }
+  else if(type==='event'){ $('.tab[data-tab="calendar"]').click(); editEvent(id); }
+  else if(type==='date'){ $('.tab[data-tab="calendar"]').click(); showAgenda(id); }
+}
 function openModal(title, bodyBuilder, onSave, onDelete){
   $('#modalTitle').textContent=title;
   const body = $('#modalBody'); body.innerHTML=''; bodyBuilder(body);
@@ -480,11 +513,14 @@ function openShotForm(existing){
   if(items.length===0){ list.innerHTML='<div class="card small">No shots yet. Tap <b>+ Shot</b>.</div>'; return; }
   list.innerHTML = items.map(s=>{
     const p = store.projects.find(x=>x.id===s.projectId);
-    const badgeClass = s.status==='Final'?'ok': (s.status==='Review'?'warn': (s.status==='WIP'?'':'danger'));
+    const badge = `<span class="badge ${s.status==='Final'?'ok':(s.status==='Review'?'warn':(s.status==='WIP'?'':'danger'))}">${s.status}</span>`;
     return `<div class="item card">
       <div>
         <h3>${s.sequence || 'SEQ'} / ${s.scene || 'SC'} / ${s.shot || 'SHOT'}</h3>
-        <div class="kicker">Status: ${s.status} • ${p?('Project: '+p.title+' • '):''}Vendor: ${s.vendor||'—'} • Due: ${s.due?fmt(s.due):'—'}</div>
+        <div class="row" style="gap:6px;align-items:center;flex-wrap:wrap">
+          ${badge}
+          <div class="kicker">${p?('Project: '+p.title+' • '):''}Vendor: ${s.vendor||'—'} • Due: ${s.due?fmt(s.due):'—'}</div>
+        </div>
         <div class="small">${s.notes||''}</div>
       </div>
       <div class="row" style="flex-direction:column;gap:8px">
@@ -498,6 +534,8 @@ function openShotForm(existing){
 // ---------- Tasks ----------
 $('#btnNewTask').onclick=()=>openTaskForm();
 $('#taskFilter').addEventListener('change', renderTasks);
+$('#btnNewNote').onclick=()=>openNoteForm();
+$('#noteFilter').addEventListener('change', renderNotes);
 function openTaskForm(prefill){
   let t = {id:uid(), projectId:prefill?.projectId||'', title:'', due:'', status:'Open', notes:''};
   openModal('New Task', (body)=>{
@@ -512,8 +550,22 @@ function openTaskForm(prefill){
     t.due = $('#tDue').value;
     t.status = $('#tStatus').value;
     t.notes = $('#tNotes').value;
-    store.tasks.push(t); save(store); closeModal(); renderTasks();
+  store.tasks.push(t); save(store); closeModal(); renderTasks();
   });
+}
+
+function editTask(id){
+  const tt = store.tasks.find(x=>x.id===id); if(!tt) return;
+  openModal('Edit Task', (body)=>{
+    body.append(formRow(`<div><div class="small">Title</div><input id="tTitle" value="${tt.title}"></div>`));
+    body.append(formRow(`<div class="row"><div class="space"><div class="small">Project</div><select id="tProj"><option value="">—</option>${store.projects.map(p=>`<option value="${p.id}" ${p.id===tt.projectId?'selected':''}>${p.title}</option>`).join('')}</select></div>
+      <div class="space"><div class="small">Due</div><input id="tDue" type="date" value="${tt.due||''}"></div></div>`));
+    body.append(formRow(`<div class="row"><div class="space"><div class="small">Status</div><select id="tStatus">${['Open','In Progress','Blocked','Done'].map(x=>`<option ${tt.status===x?'selected':''}>${x}</option>`).join('')}</select></div></div>`));
+    body.append(formRow(`<div><div class="small">Notes</div><textarea id="tNotes">${tt.notes||''}</textarea></div>`));
+  }, ()=>{
+    tt.title=$('#tTitle').value; tt.projectId=$('#tProj').value; tt.due=$('#tDue').value; tt.status=$('#tStatus').value; tt.notes=$('#tNotes').value;
+    save(store); closeModal(); renderTasks();
+  }, ()=>{ store.tasks=store.tasks.filter(x=>x.id!==id); save(store); renderTasks(); });
 }
 function renderTasks(){
   const f = $('#taskFilter').value;
@@ -530,16 +582,110 @@ function renderTasks(){
         <div class="small">${t.notes||''}</div>
       </div>
       <div class="row" style="flex-direction:column;gap:8px">
-        <button class="btn" onclick="(function(id){ const tt=store.tasks.find(x=>x.id===id); if(!tt) return; openModal('Edit Task', (b)=>{
-          b.append(formRow('<div><div class=small>Title</div><input id=tTitle value="'+tt.title+'"></div>'));
-          b.append(formRow('<div class=row><div class=space><div class=small>Project</div><select id=tProj><option value="">—</option>'+store.projects.map(p=>'<option value="'+p.id+'" '+(p.id===tt.projectId?'selected':'')+'>'+p.title+'</option>').join('')+'</select></div><div class=space><div class=small>Due</div><input id=tDue type=date value="'+(tt.due||'')+'"></div></div>'));
-          b.append(formRow('<div class=row><div class=space><div class=small>Status</div><select id=tStatus>'+['Open','In Progress','Blocked','Done'].map(x=>'<option '+(tt.status===x?'selected':'')+'>'+x+'</option>').join('')+'</select></div></div>'));
-          b.append(formRow('<div><div class=small>Notes</div><textarea id=tNotes>'+ (tt.notes||'') +'</textarea></div>'));
-        }, ()=>{ tt.title=$('#tTitle').value; tt.projectId=$('#tProj').value; tt.due=$('#tDue').value; tt.status=$('#tStatus').value; tt.notes=$('#tNotes').value; save(store); closeModal(); renderTasks(); }, ()=>{ store.tasks=store.tasks.filter(x=>x.id!==id); save(store); renderTasks(); }); })('${t.id}')">Edit</button>
+        <button class="btn" onclick="editTask('${t.id}')">Edit</button>
         <button class="btn" onclick="(store.tasks=store.tasks.filter(x=>x.id!=='${t.id}'), save(store), renderTasks())">Delete</button>
       </div>
     </div>`;
   }).join('');
+}
+
+// ---------- Notes ----------
+function openNoteForm(existing){
+  let n = existing || {id:uid(), text:'', tags:[]};
+  openModal(existing?'Edit Note':'New Note', (body)=>{
+    body.append(formRow(`<div><div class="small">Text</div><textarea id="nText">${n.text}</textarea></div>`));
+    body.append(formRow(`<div id="nTags" style="display:flex;flex-direction:column;gap:6px"></div>`));
+    body.append(formRow(`<button class="btn" type="button" id="nAddTag">+ Tag</button>`));
+    body.append(formRow(`<button class="btn" type="button" id="nInsertLink">Insert Link</button>`));
+    }, ()=>{
+      n.text = $('#nText').value;
+      const tags=[];
+      $('#nTags').querySelectorAll('.tagRow').forEach(row=>{
+        const type=row.querySelector('.tagType').value;
+        const val=row.querySelector('.tagValue')?.value;
+        if(type && val) tags.push({type,id:val});
+      });
+      n.tags = tags;
+      if(!existing) store.notes.push(n);
+      save(store);
+      closeModal();
+      renderNotes();
+    }, existing ? ()=>{
+      store.notes = store.notes.filter(x=>x.id!==existing.id);
+      save(store);
+      renderNotes();
+    } : null);
+
+  function addTagRow(tag){
+    const div=document.createElement('div');
+    div.className='row tagRow';
+    div.innerHTML=`<div class="space"><select class="tagType">
+      <option value="">Type</option>
+      <option value="project">Project</option>
+      <option value="shot">Shot</option>
+      <option value="task">Task</option>
+      <option value="event">Event</option>
+      <option value="date">Date</option>
+      </select></div><div class="space tagWrap"></div><button class="btn" type="button" onclick="this.parentElement.remove()">Remove</button>`;
+    $('#nTags').appendChild(div);
+    const typeSel=div.querySelector('.tagType');
+    const wrap=div.querySelector('.tagWrap');
+    function populate(){
+      const t=typeSel.value; wrap.innerHTML='';
+      if(t==='project') wrap.innerHTML=`<select class="tagValue"><option value="">—</option>${store.projects.map(p=>`<option value="${p.id}">${p.title}</option>`).join('')}</select>`;
+      else if(t==='shot') wrap.innerHTML=`<select class="tagValue"><option value="">—</option>${store.shots.map(s=>`<option value="${s.id}">${s.sequence||'SEQ'}/${s.scene||'SC'}/${s.shot||'SHOT'}</option>`).join('')}</select>`;
+      else if(t==='task') wrap.innerHTML=`<select class="tagValue"><option value="">—</option>${store.tasks.map(t=>`<option value="${t.id}">${t.title}</option>`).join('')}</select>`;
+      else if(t==='event') wrap.innerHTML=`<select class="tagValue"><option value="">—</option>${store.events.map(e=>`<option value="${e.id}">${e.title} (${e.date})</option>`).join('')}</select>`;
+      else if(t==='date') wrap.innerHTML=`<input type="date" class="tagValue">`;
+      if(tag && tag.type===t){ wrap.querySelector('.tagValue').value=tag.id; }
+    }
+    typeSel.onchange=populate;
+    if(tag){ typeSel.value=tag.type; }
+    populate();
+  }
+  $('#nAddTag').onclick=()=>addTagRow();
+  if(n.tags) n.tags.forEach(addTagRow);
+
+  $('#nInsertLink').onclick=()=>{
+    const type = prompt('Link type (project/shot/task/event/date)');
+    if(!type) return;
+    let id='';
+    if(type==='date'){
+      id = prompt('Date (YYYY-MM-DD)')||'';
+    } else {
+      const arr = store[type+'s']||[];
+      if(!arr.length){ alert('No items'); return; }
+      const list = arr.map((it,i)=>`${i+1}. ${getLabel(type,it.id)}`).join('\n');
+      const pick = parseInt(prompt('Choose '+type+':\n'+list))-1;
+      if(isNaN(pick)||!arr[pick]) return;
+      id = arr[pick].id;
+    }
+      if(id){ const ta=$('#nText'); ta.value += ` [[${type}:${id}]]`; }
+    };
+  }
+
+function renderNotes(){
+  const filterSel = $('#noteFilter');
+  const val = filterSel.value;
+  let opts = '<option value="all">All</option>';
+  if(store.projects.length) opts += '<optgroup label="Projects">'+store.projects.map(p=>`<option value="project:${p.id}">${p.title}</option>`).join('')+'</optgroup>';
+  if(store.shots.length) opts += '<optgroup label="Shots">'+store.shots.map(s=>`<option value="shot:${s.id}">${s.sequence||'SEQ'}/${s.scene||'SC'}/${s.shot||'SHOT'}</option>`).join('')+'</optgroup>';
+  if(store.tasks.length) opts += '<optgroup label="Tasks">'+store.tasks.map(t=>`<option value="task:${t.id}">${t.title}</option>`).join('')+'</optgroup>';
+  if(store.events.length) opts += '<optgroup label="Events">'+store.events.map(e=>`<option value="event:${e.id}">${e.title} (${e.date})</option>`).join('')+'</optgroup>';
+  filterSel.innerHTML = opts;
+  filterSel.value = val==='all'||filterSel.querySelector(`option[value='${val}']`)?val:'all';
+  const f = filterSel.value;
+  const list = $('#notesList');
+  let items = store.notes.slice();
+  if(f!=='all'){ const [ft,fi] = f.split(':'); items = items.filter(n=>n.tags.some(t=>t.type===ft && t.id===fi)); }
+  if(items.length===0){ list.innerHTML='<div class="card small">No notes yet. Tap <b>+ Note</b>.</div>'; return; }
+  list.innerHTML = items.map(n=>`<div class="item card">
+      <div>${renderNoteText(n.text)}<div class="small">${n.tags.map(t=>getLabel(t.type,t.id)).join(', ')}</div></div>
+      <div class="row" style="flex-direction:column;gap:8px">
+        <button class="btn" onclick="openNoteForm(store.notes.find(x=>x.id==='${n.id}'))">Edit</button>
+        <button class="btn" onclick="(store.notes=store.notes.filter(x=>x.id!=='${n.id}'), save(store), renderNotes())">Delete</button>
+      </div>
+    </div>`).join('');
 }
 
 // ---------- Import / Export ----------
@@ -559,7 +705,7 @@ $('#fileImport').addEventListener('change', (ev)=>{
 });
 
 // ---------- Render all ----------
-function render(){ renderCalendar(); renderProjects(); renderStoryboards(); renderShots(); renderTasks(); }
+function render(){ renderCalendar(); renderProjects(); renderStoryboards(); renderShots(); renderTasks(); renderNotes(); }
 function boot(){
   render();
   if('serviceWorker' in navigator){
