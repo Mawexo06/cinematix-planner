@@ -15,10 +15,10 @@
   --accent:#49d3c6; --accent2:#7ca7ff; --accent3:#ed7a5f;
   --ok:#22c55e; --warn:#f59e0b; --danger:#ef4444;
 }
-*{box-sizing:border-box} html,body{height:100%}
+*{box-sizing:border-box} html,body{min-height:100%}
 html{background:#0b0f15}
 body{margin:0;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);background:radial-gradient(1200px 600px at 50% -200px, #0f1724 0%, #0b0f15 55%), linear-gradient(180deg,#0b0f15 0,#0b0f15 100%);
-  color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased}
+  color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased; overflow-x:hidden}
 .container{max-width:480px;margin:0 auto;padding:14px 14px 18px}
 /* Top bar */
 header.top{position:sticky;top:env(safe-area-inset-top);z-index:20;background:rgba(11,15,21,.72);backdrop-filter:blur(10px);
@@ -30,8 +30,9 @@ header.top{position:sticky;top:env(safe-area-inset-top);z-index:20;background:rg
 .btn.primary{background:linear-gradient(180deg, var(--accent), #2dad9e); color:#042e2a; border:none}
 .btn.ghost{background:transparent}
 /* Tabs */
-.tabs{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:10px 0}
-.tab{padding:10px;text-align:center;border:1px solid var(--line);border-radius:12px;background:linear-gradient(180deg,#131b25,#0f141c);color:var(--muted);font-weight:800}
+.tabs{display:flex;gap:8px;margin:10px 0;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto;padding:10px;text-align:center;border:1px solid var(--line);border-radius:12px;background:linear-gradient(180deg,#131b25,#0f141c);color:var(--muted);font-weight:800}
 .tab.active{background:linear-gradient(180deg,var(--accent),#2dad9e);color:#042e2a;border-color:transparent}
 /* Cards & layout */
 .card{background:linear-gradient(180deg,#151e29,#121923); border:1px solid var(--line); border-radius:18px; padding:12px; box-shadow:0 10px 30px rgba(0,0,0,.25)}
@@ -52,7 +53,7 @@ textarea{min-height:90px;resize:vertical}
 .day.today{outline:2px solid var(--accent2)}
 .chips{display:flex;gap:4px;flex-wrap:wrap}
 .chip{font-size:10px;font-weight:900;padding:2px 7px;border-radius:999px;color:#041e1b}
-.chip.shoot{background:var(--accent3)} .chip.deadline{background:var(--warn)} .chip.review{background:var(--accent2)} .chip.delivery{background:var(--danger)} .chip.shot{background:var(--accent)}
+.chip.shoot{background:var(--accent3)} .chip.deadline{background:var(--warn)} .chip.review{background:var(--accent2)} .chip.delivery{background:var(--danger)} .chip.shot{background:var(--accent)} .chip.task{background:var(--accent2)} .chip.note{background:var(--accent3)}
 /* Lists */
 .item{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:start}
 .item+.item{margin-top:10px}
@@ -60,7 +61,7 @@ textarea{min-height:90px;resize:vertical}
 .kicker{font-size:12px;color:var(--muted)}
 /* Modal */
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:flex-end;z-index:50}
-.sheet{width:100%;max-width:520px;margin:0 auto;background:linear-gradient(180deg,#151e29,#111822);border-top-left-radius:16px;border-top-right-radius:16px;border:1px solid var(--line);padding:14px;box-shadow:0 -10px 30px rgba(0,0,0,.35)}
+.sheet{width:100%;max-width:520px;margin:0 auto;background:linear-gradient(180deg,#151e29,#111822);border-top-left-radius:16px;border-top-right-radius:16px;border:1px solid var(--line);padding:14px;box-shadow:0 -10px 30px rgba(0,0,0,.35);max-height:90vh;overflow-y:auto}
 .sheet .title{font-weight:900;margin:0 0 8px 0}
 .sheet .grid{display:grid;gap:10px}
 .footer{margin-top:14px;text-align:center;color:var(--muted);font-size:12px}
@@ -175,13 +176,13 @@ textarea{min-height:90px;resize:vertical}
   <div class="sheet">
     <div class="row" style="justify-content:space-between;align-items:center">
       <div class="title" id="modalTitle">New</div>
-      <button class="btn ghost" id="modalClose">Close</button>
+      <button class="btn ghost" id="modalClose" type="button">Close</button>
     </div>
     <div class="grid" id="modalBody"></div>
     <div class="row" style="margin-top:10px">
       <div class="space"></div>
-      <button class="btn" id="modalDelete" style="display:none">Delete</button>
-      <button class="btn primary" id="modalSave">Save</button>
+      <button class="btn" id="modalDelete" style="display:none" type="button">Delete</button>
+      <button class="btn primary" id="modalSave" type="button">Save</button>
     </div>
   </div>
 </div>
@@ -230,13 +231,27 @@ function openLinked(type,id){
   else if(type==='date'){ $('.tab[data-tab="calendar"]').click(); showAgenda(id); }
 }
 function openModal(title, bodyBuilder, onSave, onDelete){
-  $('#modalTitle').textContent=title;
-  const body = $('#modalBody'); body.innerHTML=''; bodyBuilder(body);
-  $('#modal').style.display='flex';
-  $('#modalSave').onclick=()=>onSave();
-  if(onDelete){ $('#modalDelete').style.display=''; $('#modalDelete').onclick=()=>{onDelete(); closeModal();}; } else { $('#modalDelete').style.display='none'; }
+  $('#modalTitle').textContent = title;
+  const body = $('#modalBody'); body.innerHTML = ''; bodyBuilder(body);
+  $('#modal').style.display = 'flex';
+  $('#modalSave').onclick = async e => {
+    e.preventDefault();
+    try { await onSave(); } catch(err){ console.error(err); }
+  };
+  const delBtn = $('#modalDelete');
+  if(onDelete){
+    delBtn.style.display = '';
+    delBtn.onclick = e => { e.preventDefault(); onDelete(); closeModal(); };
+  } else {
+    delBtn.style.display = 'none';
+    delBtn.onclick = null;
+  }
 }
-function closeModal(){ $('#modal').style.display='none'; }
+function closeModal(){
+  $('#modal').style.display = 'none';
+  $('#modalSave').onclick = null;
+  $('#modalDelete').onclick = null;
+}
 $('#modal').addEventListener('click', e=>{ if(e.target.id==='modal') closeModal(); });
 $('#modalClose').addEventListener('click', closeModal);
 
@@ -265,6 +280,14 @@ function parseDateString(str){
   const [y,m,day] = str.split('-').map(Number);
   return new Date(y, m-1, day);
 }
+function getDayItems(ds){
+  const items=[];
+  store.events.filter(e=>e.date===ds).forEach(e=>items.push({...e, kind:'event'}));
+  store.shots.filter(s=>s.due===ds).forEach(s=>items.push({id:s.id, kind:'shot', type:'Shot', title:`${s.sequence||'SEQ'} / ${s.scene||'SC'} / ${s.shot||'SHOT'}`, notes:s.notes}));
+  store.tasks.filter(t=>t.due===ds).forEach(t=>items.push({id:t.id, kind:'task', type:'Task', title:t.title, status:t.status, notes:t.notes, projectId:t.projectId}));
+  store.notes.forEach(n=>{ if((n.tags||[]).some(tag=>tag.type==='date' && tag.id===ds)){ items.push({id:n.id, kind:'note', type:'Note', text:n.text}); }});
+  return items;
+}
 let selectedDate = fmtDate(new Date());
 
 function renderCalendar(){
@@ -281,8 +304,8 @@ function renderCalendar(){
     cell.className='day'+(date.getMonth()!==currentMonth.getMonth()?' other':'')+(sameDay(date,today)?' today':'');
     const num = document.createElement('div'); num.className='num'; num.textContent=date.getDate(); cell.appendChild(num);
     const chips = document.createElement('div'); chips.className='chips'; cell.appendChild(chips);
-    store.events.filter(e=>e.date===ds).slice(0,3).forEach(e=>{
-      const chip=document.createElement('div'); chip.className='chip '+e.type.toLowerCase(); chip.textContent=e.type; chips.appendChild(chip);
+    getDayItems(ds).slice(0,3).forEach(it=>{
+      const chip=document.createElement('div'); chip.className='chip '+(it.type||'').toLowerCase(); chip.textContent=it.type; chips.appendChild(chip);
       chip.addEventListener('click',()=>showAgenda(ds));
     });
     cell.addEventListener('click',()=>showAgenda(ds));
@@ -294,20 +317,60 @@ function renderCalendar(){
 function showAgenda(ds){
   selectedDate = ds;
   const wrap = $('#agenda');
-  const items = store.events.filter(e=>e.date===ds).sort((a,b)=>(a.start||'').localeCompare(b.start||''));
-  if(items.length===0){ wrap.innerHTML = `<div class="small">No events on ${parseDateString(ds).toDateString()}</div>`; return; }
-  wrap.innerHTML = items.map(e=>`
+  const items = getDayItems(ds).sort((a,b)=>(a.start||'').localeCompare(b.start||''));
+  if(items.length===0){ wrap.innerHTML = `<div class="small">No events on ${parseDateString(ds).toDateString()}</div>`; return;}
+  wrap.innerHTML = items.map(it=>{
+    if(it.kind==='event'){
+      return `
     <div class="item card">
       <div>
-        <h3>${e.title}</h3>
-        <div class="kicker">${e.type} • ${e.start||''}${e.end?'–'+e.end:''}${e.location?' • '+e.location:''}${e.projectId?' • Project: '+(store.projects.find(p=>p.id===e.projectId)?.title||'') : ''}</div>
+        <h3>${it.title}</h3>
+        <div class="kicker">${it.type} • ${it.start||''}${it.end?'–'+it.end:''}${it.location?' • '+it.location:''}${it.projectId?' • Project: '+(store.projects.find(p=>p.id===it.projectId)?.title||'') : ''}</div>
       </div>
       <div class="row" style="flex-direction:column;gap:8px">
-        <button class="btn" onclick="editEvent('${e.id}')">Edit</button>
-        <button class="btn" onclick="removeEvent('${e.id}')">Delete</button>
+        <button class="btn" onclick="editEvent('${it.id}')">Edit</button>
+        <button class="btn" onclick="removeEvent('${it.id}')">Delete</button>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+    } else if(it.kind==='shot'){
+      return `
+    <div class="item card">
+      <div>
+        <h3>${it.title}</h3>
+        <div class="kicker">Shot</div>
+        <div class="small">${it.notes||''}</div>
+      </div>
+      <div class="row" style="flex-direction:column;gap:8px">
+        <button class="btn" onclick="openShotForm(store.shots.find(x=>x.id==='${it.id}'))">Edit</button>
+      </div>
+    </div>`;
+    } else if(it.kind==='task'){
+      const p = store.projects.find(x=>x.id===it.projectId);
+      return `
+    <div class="item card">
+      <div>
+        <h3>${it.title}</h3>
+        <div class="kicker">Task${p?(' • Project: '+p.title):''} • ${it.status}</div>
+        <div class="small">${it.notes||''}</div>
+      </div>
+      <div class="row" style="flex-direction:column;gap:8px">
+        <button class="btn" onclick="editTask('${it.id}')">Edit</button>
+      </div>
+    </div>`;
+    } else if(it.kind==='note'){
+      return `
+    <div class="item card">
+      <div>
+        <h3>Note</h3>
+        <div class="small">${renderNoteText(it.text)}</div>
+      </div>
+      <div class="row" style="flex-direction:column;gap:8px">
+        <button class="btn" onclick="openNoteForm(store.notes.find(x=>x.id==='${it.id}'))">Edit</button>
+      </div>
+    </div>`;
+    }
+    return '';
+  }).join('');
 }
 $('#quickAddEvent').onclick=()=>openEventForm();
 
@@ -414,8 +477,8 @@ function openShotForm(existing){
     s.due = $('#sDue').value;
     s.notes = $('#sNotes').value;
     if(!existing) store.shots.push(s);
-    save(store); closeModal(); renderShots();
-  }, existing ? ()=>{ store.shots = store.shots.filter(x=>x.id!==existing.id); save(store); renderShots(); } : null);
+    save(store); closeModal(); render();
+  }, existing ? ()=>{ store.shots = store.shots.filter(x=>x.id!==existing.id); save(store); render(); } : null);
   }
 
   function openStoryboardForm(existing){
@@ -447,7 +510,9 @@ function openShotForm(existing){
         else { Object.assign(sh,{sequence:seq, scene, shot, notes}); }
       }
       if(!existing) store.storyboards.push(board);
-      save(store); closeModal(); renderStoryboards(); renderShots();
+      save(store);
+      closeModal();
+      render();
     }, existing ? ()=>{ store.storyboards = store.storyboards.filter(x=>x.id!==existing.id); save(store); renderStoryboards(); } : null);
 
     const container = $('#sbShots');
@@ -525,7 +590,7 @@ function openShotForm(existing){
       </div>
       <div class="row" style="flex-direction:column;gap:8px">
         <button class="btn" onclick="openShotForm(store.shots.find(x=>x.id==='${s.id}'))">Edit</button>
-        <button class="btn" onclick="(function(){ store.shots=store.shots.filter(x=>x.id!=='${s.id}'); save(store); renderShots(); })()">Delete</button>
+        <button class="btn" onclick="(function(){ store.shots=store.shots.filter(x=>x.id!=='${s.id}'); save(store); render(); })()">Delete</button>
       </div>
     </div>`;
   }).join('');
@@ -550,7 +615,7 @@ function openTaskForm(prefill){
     t.due = $('#tDue').value;
     t.status = $('#tStatus').value;
     t.notes = $('#tNotes').value;
-  store.tasks.push(t); save(store); closeModal(); renderTasks();
+  store.tasks.push(t); save(store); closeModal(); render();
   });
 }
 
@@ -564,8 +629,8 @@ function editTask(id){
     body.append(formRow(`<div><div class="small">Notes</div><textarea id="tNotes">${tt.notes||''}</textarea></div>`));
   }, ()=>{
     tt.title=$('#tTitle').value; tt.projectId=$('#tProj').value; tt.due=$('#tDue').value; tt.status=$('#tStatus').value; tt.notes=$('#tNotes').value;
-    save(store); closeModal(); renderTasks();
-  }, ()=>{ store.tasks=store.tasks.filter(x=>x.id!==id); save(store); renderTasks(); });
+    save(store); closeModal(); render();
+  }, ()=>{ store.tasks=store.tasks.filter(x=>x.id!==id); save(store); render(); });
 }
 function renderTasks(){
   const f = $('#taskFilter').value;
@@ -583,7 +648,7 @@ function renderTasks(){
       </div>
       <div class="row" style="flex-direction:column;gap:8px">
         <button class="btn" onclick="editTask('${t.id}')">Edit</button>
-        <button class="btn" onclick="(store.tasks=store.tasks.filter(x=>x.id!=='${t.id}'), save(store), renderTasks())">Delete</button>
+        <button class="btn" onclick="(store.tasks=store.tasks.filter(x=>x.id!=='${t.id}'), save(store), render())">Delete</button>
       </div>
     </div>`;
   }).join('');
@@ -609,11 +674,11 @@ function openNoteForm(existing){
       if(!existing) store.notes.push(n);
       save(store);
       closeModal();
-      renderNotes();
+      render();
     }, existing ? ()=>{
       store.notes = store.notes.filter(x=>x.id!==existing.id);
       save(store);
-      renderNotes();
+      render();
     } : null);
 
   function addTagRow(tag){
@@ -683,7 +748,7 @@ function renderNotes(){
       <div>${renderNoteText(n.text)}<div class="small">${n.tags.map(t=>getLabel(t.type,t.id)).join(', ')}</div></div>
       <div class="row" style="flex-direction:column;gap:8px">
         <button class="btn" onclick="openNoteForm(store.notes.find(x=>x.id==='${n.id}'))">Edit</button>
-        <button class="btn" onclick="(store.notes=store.notes.filter(x=>x.id!=='${n.id}'), save(store), renderNotes())">Delete</button>
+        <button class="btn" onclick="(store.notes=store.notes.filter(x=>x.id!=='${n.id}'), save(store), render())">Delete</button>
       </div>
     </div>`).join('');
 }
