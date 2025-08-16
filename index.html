@@ -176,13 +176,13 @@ textarea{min-height:90px;resize:vertical}
   <div class="sheet">
     <div class="row" style="justify-content:space-between;align-items:center">
       <div class="title" id="modalTitle">New</div>
-      <button class="btn ghost" id="modalClose">Close</button>
+      <button class="btn ghost" id="modalClose" type="button">Close</button>
     </div>
     <div class="grid" id="modalBody"></div>
     <div class="row" style="margin-top:10px">
       <div class="space"></div>
-      <button class="btn" id="modalDelete" style="display:none">Delete</button>
-      <button class="btn primary" id="modalSave">Save</button>
+      <button class="btn" id="modalDelete" style="display:none" type="button">Delete</button>
+      <button class="btn primary" id="modalSave" type="button">Save</button>
     </div>
   </div>
 </div>
@@ -232,12 +232,16 @@ function openLinked(type,id){
 }
 function openModal(title, bodyBuilder, onSave, onDelete){
   $('#modalTitle').textContent=title;
-  const body = $('#modalBody'); body.innerHTML=''; bodyBuilder(body);
+  const body=$('#modalBody'); body.innerHTML=''; bodyBuilder(body);
   $('#modal').style.display='flex';
   $('#modalSave').onclick=async()=>{ try{ await onSave(); }catch(err){ console.error(err); } };
   if(onDelete){ $('#modalDelete').style.display=''; $('#modalDelete').onclick=()=>{onDelete(); closeModal();}; } else { $('#modalDelete').style.display='none'; }
 }
-function closeModal(){ $('#modal').style.display='none'; }
+function closeModal(){
+  $('#modal').style.display='none';
+  $('#modalSave').onclick=null;
+  $('#modalDelete').onclick=null;
+}
 $('#modal').addEventListener('click', e=>{ if(e.target.id==='modal') closeModal(); });
 $('#modalClose').addEventListener('click', closeModal);
 
@@ -496,7 +500,9 @@ function openShotForm(existing){
         else { Object.assign(sh,{sequence:seq, scene, shot, notes}); }
       }
       if(!existing) store.storyboards.push(board);
-      save(store); closeModal(); renderStoryboards(); renderShots();
+      save(store);
+      closeModal();
+      render();
     }, existing ? ()=>{ store.storyboards = store.storyboards.filter(x=>x.id!==existing.id); save(store); renderStoryboards(); } : null);
 
     const container = $('#sbShots');
