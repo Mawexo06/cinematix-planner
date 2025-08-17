@@ -233,29 +233,26 @@ function openLinked(type,id){
   else if(type==='event'){ $('.tab[data-tab="calendar"]').click(); editEvent(id); }
   else if(type==='date'){ $('.tab[data-tab="calendar"]').click(); showAgenda(id); }
 }
-let modalSaveCb=null, modalDeleteCb=null;
 function openModal(title, bodyBuilder, onSave, onDelete){
   $('#modalTitle').textContent=title;
   const body=$('#modalBody'); body.innerHTML=''; bodyBuilder(body);
   $('#modal').style.display='flex';
-  modalSaveCb=onSave;
-  modalDeleteCb=onDelete||null;
-  $('#modalDelete').style.display=onDelete?'':'none';
-}
-$('#modalSave').onclick=async e=>{
-  e.preventDefault();
-  if(modalSaveCb){
-    try{ await modalSaveCb(); }catch(err){ console.error(err); }
+  $('#modalSave').onclick=async e=>{
+    e.preventDefault();
+    try{ await onSave(); }catch(err){ console.error(err); }
+  };
+  if(onDelete){
+    $('#modalDelete').style.display='';
+    $('#modalDelete').onclick=e=>{ e.preventDefault(); onDelete(); closeModal(); };
+  }else{
+    $('#modalDelete').style.display='none';
+    $('#modalDelete').onclick=null;
   }
-};
-$('#modalDelete').onclick=e=>{
-  e.preventDefault();
-  if(modalDeleteCb){ modalDeleteCb(); closeModal(); }
-};
+}
 function closeModal(){
   $('#modal').style.display='none';
-  modalSaveCb=null;
-  modalDeleteCb=null;
+  $('#modalSave').onclick=null;
+  $('#modalDelete').onclick=null;
 }
 $('#modal').addEventListener('click', e=>{ if(e.target.id==='modal') closeModal(); });
 $('#modalClose').addEventListener('click', closeModal);
