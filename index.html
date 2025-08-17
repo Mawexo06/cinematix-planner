@@ -15,10 +15,10 @@
   --accent:#49d3c6; --accent2:#7ca7ff; --accent3:#ed7a5f;
   --ok:#22c55e; --warn:#f59e0b; --danger:#ef4444;
 }
-*{box-sizing:border-box} html,body{height:100%}
+*{box-sizing:border-box} html,body{min-height:100%}
 html{background:#0b0f15}
 body{margin:0;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom);background:radial-gradient(1200px 600px at 50% -200px, #0f1724 0%, #0b0f15 55%), linear-gradient(180deg,#0b0f15 0,#0b0f15 100%);
-  color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased}
+  color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Roboto,Helvetica,Arial,sans-serif; -webkit-font-smoothing:antialiased; overflow-x:hidden}
 .container{max-width:480px;margin:0 auto;padding:14px 14px 18px}
 /* Top bar */
 header.top{position:sticky;top:env(safe-area-inset-top);z-index:20;background:rgba(11,15,21,.72);backdrop-filter:blur(10px);
@@ -30,8 +30,9 @@ header.top{position:sticky;top:env(safe-area-inset-top);z-index:20;background:rg
 .btn.primary{background:linear-gradient(180deg, var(--accent), #2dad9e); color:#042e2a; border:none}
 .btn.ghost{background:transparent}
 /* Tabs */
-.tabs{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:10px 0}
-.tab{padding:10px;text-align:center;border:1px solid var(--line);border-radius:12px;background:linear-gradient(180deg,#131b25,#0f141c);color:var(--muted);font-weight:800}
+.tabs{display:flex;gap:8px;margin:10px 0;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex:0 0 auto;padding:10px;text-align:center;border:1px solid var(--line);border-radius:12px;background:linear-gradient(180deg,#131b25,#0f141c);color:var(--muted);font-weight:800}
 .tab.active{background:linear-gradient(180deg,var(--accent),#2dad9e);color:#042e2a;border-color:transparent}
 /* Cards & layout */
 .card{background:linear-gradient(180deg,#151e29,#121923); border:1px solid var(--line); border-radius:18px; padding:12px; box-shadow:0 10px 30px rgba(0,0,0,.25)}
@@ -52,7 +53,7 @@ textarea{min-height:90px;resize:vertical}
 .day.today{outline:2px solid var(--accent2)}
 .chips{display:flex;gap:4px;flex-wrap:wrap}
 .chip{font-size:10px;font-weight:900;padding:2px 7px;border-radius:999px;color:#041e1b}
-.chip.shoot{background:var(--accent3)} .chip.deadline{background:var(--warn)} .chip.review{background:var(--accent2)} .chip.delivery{background:var(--danger)} .chip.shot{background:var(--accent)}
+.chip.shoot{background:var(--accent3)} .chip.deadline{background:var(--warn)} .chip.review{background:var(--accent2)} .chip.delivery{background:var(--danger)} .chip.shot{background:var(--accent)} .chip.task{background:var(--accent2)} .chip.note{background:var(--accent3)}
 /* Lists */
 .item{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:start}
 .item+.item{margin-top:10px}
@@ -60,7 +61,7 @@ textarea{min-height:90px;resize:vertical}
 .kicker{font-size:12px;color:var(--muted)}
 /* Modal */
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:flex-end;z-index:50}
-.sheet{width:100%;max-width:520px;margin:0 auto;background:linear-gradient(180deg,#151e29,#111822);border-top-left-radius:16px;border-top-right-radius:16px;border:1px solid var(--line);padding:14px;box-shadow:0 -10px 30px rgba(0,0,0,.35)}
+    .sheet{width:100%;max-width:520px;margin:0 auto;background:linear-gradient(180deg,#151e29,#111822);border-top-left-radius:16px;border-top-right-radius:16px;border:1px solid var(--line);padding:14px;box-shadow:0 -10px 30px rgba(0,0,0,.35);max-height:90vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
 .sheet .title{font-weight:900;margin:0 0 8px 0}
 .sheet .grid{display:grid;gap:10px}
 .footer{margin-top:14px;text-align:center;color:var(--muted);font-size:12px}
@@ -175,13 +176,13 @@ textarea{min-height:90px;resize:vertical}
   <div class="sheet">
     <div class="row" style="justify-content:space-between;align-items:center">
       <div class="title" id="modalTitle">New</div>
-      <button class="btn ghost" id="modalClose">Close</button>
+      <button class="btn ghost" id="modalClose" type="button">Close</button>
     </div>
     <div class="grid" id="modalBody"></div>
-    <div class="row" style="margin-top:10px">
+    <div class="row" style="margin:10px 0 20px">
       <div class="space"></div>
-      <button class="btn" id="modalDelete" style="display:none">Delete</button>
-      <button class="btn primary" id="modalSave">Save</button>
+      <button class="btn" id="modalDelete" style="display:none" type="button">Delete</button>
+      <button class="btn primary" id="modalSave" type="button">Save</button>
     </div>
   </div>
 </div>
@@ -190,7 +191,10 @@ textarea{min-height:90px;resize:vertical}
 // ---------- Storage ----------
 const KEY='cinematix.v3';
 function load(){ try{return JSON.parse(localStorage.getItem(KEY)||'{}')}catch{return{}} }
-function save(s){ localStorage.setItem(KEY, JSON.stringify(s)); }
+function save(s){
+  try{ localStorage.setItem(KEY, JSON.stringify(s)); }
+  catch(err){ console.error('Save failed', err); throw err; }
+}
 function init(){
   const s = load();
   s.projects = s.projects||[];
@@ -231,12 +235,27 @@ function openLinked(type,id){
 }
 function openModal(title, bodyBuilder, onSave, onDelete){
   $('#modalTitle').textContent=title;
-  const body = $('#modalBody'); body.innerHTML=''; bodyBuilder(body);
+  const body=$('#modalBody'); body.innerHTML=''; bodyBuilder(body);
   $('#modal').style.display='flex';
-  $('#modalSave').onclick=()=>onSave();
-  if(onDelete){ $('#modalDelete').style.display=''; $('#modalDelete').onclick=()=>{onDelete(); closeModal();}; } else { $('#modalDelete').style.display='none'; }
+  $('#modalSave').onclick=async()=>{
+    const btn=$('#modalSave');
+    btn.disabled=true;
+    try{ await onSave(); }catch(err){ console.error(err); }
+    btn.disabled=false;
+  };
+  if(onDelete){
+    $('#modalDelete').style.display='';
+    $('#modalDelete').onclick=()=>{ onDelete(); closeModal(); };
+  } else {
+    $('#modalDelete').style.display='none';
+    $('#modalDelete').onclick=null;
+  }
 }
-function closeModal(){ $('#modal').style.display='none'; }
+function closeModal(){
+  $('#modal').style.display='none';
+  $('#modalSave').onclick=null;
+  $('#modalDelete').onclick=null;
+}
 $('#modal').addEventListener('click', e=>{ if(e.target.id==='modal') closeModal(); });
 $('#modalClose').addEventListener('click', closeModal);
 
@@ -265,6 +284,14 @@ function parseDateString(str){
   const [y,m,day] = str.split('-').map(Number);
   return new Date(y, m-1, day);
 }
+function getDayItems(ds){
+  const items=[];
+  store.events.filter(e=>e.date===ds).forEach(e=>items.push({...e, kind:'event'}));
+  store.shots.filter(s=>s.due===ds).forEach(s=>items.push({id:s.id, kind:'shot', type:'Shot', title:`${s.sequence||'SEQ'} / ${s.scene||'SC'} / ${s.shot||'SHOT'}`, notes:s.notes}));
+  store.tasks.filter(t=>t.due===ds).forEach(t=>items.push({id:t.id, kind:'task', type:'Task', title:t.title, status:t.status, notes:t.notes, projectId:t.projectId}));
+  store.notes.forEach(n=>{ if((n.tags||[]).some(tag=>tag.type==='date' && tag.id===ds)){ items.push({id:n.id, kind:'note', type:'Note', text:n.text}); }});
+  return items;
+}
 let selectedDate = fmtDate(new Date());
 
 function renderCalendar(){
@@ -281,8 +308,8 @@ function renderCalendar(){
     cell.className='day'+(date.getMonth()!==currentMonth.getMonth()?' other':'')+(sameDay(date,today)?' today':'');
     const num = document.createElement('div'); num.className='num'; num.textContent=date.getDate(); cell.appendChild(num);
     const chips = document.createElement('div'); chips.className='chips'; cell.appendChild(chips);
-    store.events.filter(e=>e.date===ds).slice(0,3).forEach(e=>{
-      const chip=document.createElement('div'); chip.className='chip '+e.type.toLowerCase(); chip.textContent=e.type; chips.appendChild(chip);
+    getDayItems(ds).slice(0,3).forEach(it=>{
+      const chip=document.createElement('div'); chip.className='chip '+(it.type||'').toLowerCase(); chip.textContent=it.type; chips.appendChild(chip);
       chip.addEventListener('click',()=>showAgenda(ds));
     });
     cell.addEventListener('click',()=>showAgenda(ds));
@@ -294,20 +321,60 @@ function renderCalendar(){
 function showAgenda(ds){
   selectedDate = ds;
   const wrap = $('#agenda');
-  const items = store.events.filter(e=>e.date===ds).sort((a,b)=>(a.start||'').localeCompare(b.start||''));
-  if(items.length===0){ wrap.innerHTML = `<div class="small">No events on ${parseDateString(ds).toDateString()}</div>`; return; }
-  wrap.innerHTML = items.map(e=>`
+  const items = getDayItems(ds).sort((a,b)=>(a.start||'').localeCompare(b.start||''));
+  if(items.length===0){ wrap.innerHTML = `<div class="small">No events on ${parseDateString(ds).toDateString()}</div>`; return;}
+  wrap.innerHTML = items.map(it=>{
+    if(it.kind==='event'){
+      return `
     <div class="item card">
       <div>
-        <h3>${e.title}</h3>
-        <div class="kicker">${e.type} • ${e.start||''}${e.end?'–'+e.end:''}${e.location?' • '+e.location:''}${e.projectId?' • Project: '+(store.projects.find(p=>p.id===e.projectId)?.title||'') : ''}</div>
+        <h3>${it.title}</h3>
+        <div class="kicker">${it.type} • ${it.start||''}${it.end?'–'+it.end:''}${it.location?' • '+it.location:''}${it.projectId?' • Project: '+(store.projects.find(p=>p.id===it.projectId)?.title||'') : ''}</div>
       </div>
       <div class="row" style="flex-direction:column;gap:8px">
-        <button class="btn" onclick="editEvent('${e.id}')">Edit</button>
-        <button class="btn" onclick="removeEvent('${e.id}')">Delete</button>
+        <button class="btn" onclick="editEvent('${it.id}')">Edit</button>
+        <button class="btn" onclick="removeEvent('${it.id}')">Delete</button>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+    } else if(it.kind==='shot'){
+      return `
+    <div class="item card">
+      <div>
+        <h3>${it.title}</h3>
+        <div class="kicker">Shot</div>
+        <div class="small">${it.notes||''}</div>
+      </div>
+      <div class="row" style="flex-direction:column;gap:8px">
+        <button class="btn" onclick="openShotForm(store.shots.find(x=>x.id==='${it.id}'))">Edit</button>
+      </div>
+    </div>`;
+    } else if(it.kind==='task'){
+      const p = store.projects.find(x=>x.id===it.projectId);
+      return `
+    <div class="item card">
+      <div>
+        <h3>${it.title}</h3>
+        <div class="kicker">Task${p?(' • Project: '+p.title):''} • ${it.status}</div>
+        <div class="small">${it.notes||''}</div>
+      </div>
+      <div class="row" style="flex-direction:column;gap:8px">
+        <button class="btn" onclick="editTask('${it.id}')">Edit</button>
+      </div>
+    </div>`;
+    } else if(it.kind==='note'){
+      return `
+    <div class="item card">
+      <div>
+        <h3>Note</h3>
+        <div class="small">${renderNoteText(it.text)}</div>
+      </div>
+      <div class="row" style="flex-direction:column;gap:8px">
+        <button class="btn" onclick="openNoteForm(store.notes.find(x=>x.id==='${it.id}'))">Edit</button>
+      </div>
+    </div>`;
+    }
+    return '';
+  }).join('');
 }
 $('#quickAddEvent').onclick=()=>openEventForm();
 
@@ -414,8 +481,8 @@ function openShotForm(existing){
     s.due = $('#sDue').value;
     s.notes = $('#sNotes').value;
     if(!existing) store.shots.push(s);
-    save(store); closeModal(); renderShots();
-  }, existing ? ()=>{ store.shots = store.shots.filter(x=>x.id!==existing.id); save(store); renderShots(); } : null);
+    save(store); closeModal(); render();
+  }, existing ? ()=>{ store.shots = store.shots.filter(x=>x.id!==existing.id); save(store); render(); } : null);
   }
 
   function openStoryboardForm(existing){
@@ -424,7 +491,7 @@ function openShotForm(existing){
       body.append(formRow(`<div><div class="small">Title</div><input id="sbTitle" value="${board.title}"></div>`));
       body.append(formRow(`<div id="sbShots" style="display:flex;flex-direction:column;gap:10px"></div>`));
       body.append(formRow(`<button class="btn" type="button" id="sbAddShot">+ Add Shot</button>`));
-    }, async ()=>{
+    }, ()=>{
       board.title = $('#sbTitle').value.trim();
       const container = $('#sbShots');
       const items = Array.from(container.querySelectorAll('.sbItem'));
@@ -436,21 +503,40 @@ function openShotForm(existing){
         const shot = item.querySelector('.sbShot').value.trim();
         const camera = item.querySelector('.sbCamera').value.trim();
         const notes = item.querySelector('.sbNotes').value.trim();
-        const file = item.querySelector('.sbImage').files[0];
-        let image = item.dataset.image || '';
-        if(file){
-          image = await new Promise(res=>{ const r=new FileReader(); r.onload=e=>res(e.target.result); r.readAsDataURL(file); });
-        }
+        const image = item.dataset.image || '';
         board.shots.push({id, sequence:seq, scene, shot, camera, notes, image});
         let sh = store.shots.find(x=>x.id===id);
         if(!sh){ sh={id, projectId:'', sequence:seq, scene, shot, vendor:'', status:'Bid', due:'', notes}; store.shots.push(sh); }
         else { Object.assign(sh,{sequence:seq, scene, shot, notes}); }
       }
       if(!existing) store.storyboards.push(board);
-      save(store); closeModal(); renderStoryboards(); renderShots();
+      try{ save(store); }
+      catch(err){ if(!existing) store.storyboards.pop(); alert('Unable to save storyboard. Storage may be full.'); return; }
+      closeModal();
+      render();
     }, existing ? ()=>{ store.storyboards = store.storyboards.filter(x=>x.id!==existing.id); save(store); renderStoryboards(); } : null);
 
     const container = $('#sbShots');
+    async function resizeImage(file){
+      const maxH = window.innerHeight/3;
+      return new Promise(res=>{
+        const reader=new FileReader();
+        reader.onload=e=>{
+          const img=new Image();
+          img.onload=()=>{
+            const h=Math.min(maxH,img.height);
+            const w=img.width*h/img.height;
+            const canvas=document.createElement('canvas');
+            canvas.width=w; canvas.height=h;
+            const ctx=canvas.getContext('2d');
+            ctx.drawImage(img,0,0,w,h);
+            res(canvas.toDataURL('image/jpeg',0.8));
+          };
+          img.src=e.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
     function addShotRow(data){
       const id = data?.id || uid();
       const div = document.createElement('div');
@@ -467,7 +553,7 @@ function openShotForm(existing){
           <div class="space"><input class="sbCamera" placeholder="Camera" value="${data?.camera||''}"></div>
           <div class="space"><input class="sbImage" type="file" accept="image/*"></div>
         </div>
-        ${data?.image?`<img src="${data.image}" style="width:100%;margin-top:6px">`:''}
+        ${data?.image?`<img class="sbPreview" src="${data.image}" style="width:100%;margin-top:6px;height:calc(100vh/3);object-fit:cover">`:''}
         <textarea class="sbNotes" placeholder="Notes" style="margin-top:6px">${data?.notes||''}</textarea>
         <div class="row" style="margin-top:6px">
           <button class="btn sbUp" type="button">↑</button>
@@ -476,6 +562,21 @@ function openShotForm(existing){
           <button class="btn sbRemove" type="button">Remove</button>
         </div>`;
       container.appendChild(div);
+      const fileInput = div.querySelector('.sbImage');
+      fileInput.onchange=async()=>{
+        if(!fileInput.files[0]) return;
+        const imgData = await resizeImage(fileInput.files[0]);
+        div.dataset.image = imgData;
+        let prev = div.querySelector('.sbPreview');
+        if(!prev){
+          prev=document.createElement('img');
+          prev.className='sbPreview';
+          prev.style='width:100%;margin-top:6px;height:calc(100vh/3);object-fit:cover';
+          const notes=div.querySelector('.sbNotes');
+          div.insertBefore(prev, notes);
+        }
+        prev.src = imgData;
+      };
       div.querySelector('.sbUp').onclick=()=>{ if(div.previousElementSibling) container.insertBefore(div, div.previousElementSibling); };
       div.querySelector('.sbDown').onclick=()=>{ if(div.nextElementSibling) container.insertBefore(div.nextElementSibling, div); };
       div.querySelector('.sbRemove').onclick=()=>div.remove();
@@ -492,7 +593,7 @@ function openShotForm(existing){
         <h3>${sb.title||'Storyboard'}</h3>
         ${sb.shots.map(sh=>`
           <div style="margin-top:8px">
-            ${sh.image?`<img src="${sh.image}" style="width:100%">`:''}
+            ${sh.image?`<img src="${sh.image}" style="width:100%;height:calc(100vh/3);object-fit:cover">`:''}
             <div class="small">${sh.sequence||'SEQ'} / ${sh.scene||'SC'} / ${sh.shot||'SHOT'}${sh.camera?(' • Camera: '+sh.camera):''}</div>
             <div class="small">${sh.notes||''}</div>
           </div>
@@ -525,7 +626,7 @@ function openShotForm(existing){
       </div>
       <div class="row" style="flex-direction:column;gap:8px">
         <button class="btn" onclick="openShotForm(store.shots.find(x=>x.id==='${s.id}'))">Edit</button>
-        <button class="btn" onclick="(function(){ store.shots=store.shots.filter(x=>x.id!=='${s.id}'); save(store); renderShots(); })()">Delete</button>
+        <button class="btn" onclick="(function(){ store.shots=store.shots.filter(x=>x.id!=='${s.id}'); save(store); render(); })()">Delete</button>
       </div>
     </div>`;
   }).join('');
@@ -550,7 +651,7 @@ function openTaskForm(prefill){
     t.due = $('#tDue').value;
     t.status = $('#tStatus').value;
     t.notes = $('#tNotes').value;
-  store.tasks.push(t); save(store); closeModal(); renderTasks();
+  store.tasks.push(t); save(store); closeModal(); render();
   });
 }
 
@@ -564,8 +665,8 @@ function editTask(id){
     body.append(formRow(`<div><div class="small">Notes</div><textarea id="tNotes">${tt.notes||''}</textarea></div>`));
   }, ()=>{
     tt.title=$('#tTitle').value; tt.projectId=$('#tProj').value; tt.due=$('#tDue').value; tt.status=$('#tStatus').value; tt.notes=$('#tNotes').value;
-    save(store); closeModal(); renderTasks();
-  }, ()=>{ store.tasks=store.tasks.filter(x=>x.id!==id); save(store); renderTasks(); });
+    save(store); closeModal(); render();
+  }, ()=>{ store.tasks=store.tasks.filter(x=>x.id!==id); save(store); render(); });
 }
 function renderTasks(){
   const f = $('#taskFilter').value;
@@ -583,7 +684,7 @@ function renderTasks(){
       </div>
       <div class="row" style="flex-direction:column;gap:8px">
         <button class="btn" onclick="editTask('${t.id}')">Edit</button>
-        <button class="btn" onclick="(store.tasks=store.tasks.filter(x=>x.id!=='${t.id}'), save(store), renderTasks())">Delete</button>
+        <button class="btn" onclick="(store.tasks=store.tasks.filter(x=>x.id!=='${t.id}'), save(store), render())">Delete</button>
       </div>
     </div>`;
   }).join('');
@@ -609,11 +710,11 @@ function openNoteForm(existing){
       if(!existing) store.notes.push(n);
       save(store);
       closeModal();
-      renderNotes();
+      render();
     }, existing ? ()=>{
       store.notes = store.notes.filter(x=>x.id!==existing.id);
       save(store);
-      renderNotes();
+      render();
     } : null);
 
   function addTagRow(tag){
@@ -683,7 +784,7 @@ function renderNotes(){
       <div>${renderNoteText(n.text)}<div class="small">${n.tags.map(t=>getLabel(t.type,t.id)).join(', ')}</div></div>
       <div class="row" style="flex-direction:column;gap:8px">
         <button class="btn" onclick="openNoteForm(store.notes.find(x=>x.id==='${n.id}'))">Edit</button>
-        <button class="btn" onclick="(store.notes=store.notes.filter(x=>x.id!=='${n.id}'), save(store), renderNotes())">Delete</button>
+        <button class="btn" onclick="(store.notes=store.notes.filter(x=>x.id!=='${n.id}'), save(store), render())">Delete</button>
       </div>
     </div>`).join('');
 }
