@@ -61,7 +61,7 @@ textarea{min-height:90px;resize:vertical}
 .kicker{font-size:12px;color:var(--muted)}
 /* Modal */
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:flex-end;z-index:50}
-.sheet{width:100%;max-width:520px;margin:0 auto;background:linear-gradient(180deg,#151e29,#111822);border-top-left-radius:16px;border-top-right-radius:16px;border:1px solid var(--line);padding:14px;box-shadow:0 -10px 30px rgba(0,0,0,.35);max-height:90vh;overflow-y:auto}
+    .sheet{width:100%;max-width:520px;margin:0 auto;background:linear-gradient(180deg,#151e29,#111822);border-top-left-radius:16px;border-top-right-radius:16px;border:1px solid var(--line);padding:14px;box-shadow:0 -10px 30px rgba(0,0,0,.35);max-height:90vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
 .sheet .title{font-weight:900;margin:0 0 8px 0}
 .sheet .grid{display:grid;gap:10px}
 .footer{margin-top:14px;text-align:center;color:var(--muted);font-size:12px}
@@ -179,7 +179,7 @@ textarea{min-height:90px;resize:vertical}
       <button class="btn ghost" id="modalClose" type="button">Close</button>
     </div>
     <div class="grid" id="modalBody"></div>
-    <div class="row" style="margin-top:10px">
+    <div class="row" style="margin:10px 0 20px">
       <div class="space"></div>
       <button class="btn" id="modalDelete" style="display:none" type="button">Delete</button>
       <button class="btn primary" id="modalSave" type="button">Save</button>
@@ -191,7 +191,10 @@ textarea{min-height:90px;resize:vertical}
 // ---------- Storage ----------
 const KEY='cinematix.v3';
 function load(){ try{return JSON.parse(localStorage.getItem(KEY)||'{}')}catch{return{}} }
-function save(s){ localStorage.setItem(KEY, JSON.stringify(s)); }
+function save(s){
+  try{ localStorage.setItem(KEY, JSON.stringify(s)); }
+  catch(err){ console.error('Save failed', err); throw err; }
+}
 function init(){
   const s = load();
   s.projects = s.projects||[];
@@ -234,8 +237,19 @@ function openModal(title, bodyBuilder, onSave, onDelete){
   $('#modalTitle').textContent=title;
   const body=$('#modalBody'); body.innerHTML=''; bodyBuilder(body);
   $('#modal').style.display='flex';
-  $('#modalSave').onclick=async()=>{ try{ await onSave(); }catch(err){ console.error(err); } };
-  if(onDelete){ $('#modalDelete').style.display=''; $('#modalDelete').onclick=()=>{onDelete(); closeModal();}; } else { $('#modalDelete').style.display='none'; }
+  $('#modalSave').onclick=async()=>{
+    const btn=$('#modalSave');
+    btn.disabled=true;
+    try{ await onSave(); }catch(err){ console.error(err); }
+    btn.disabled=false;
+  };
+  if(onDelete){
+    $('#modalDelete').style.display='';
+    $('#modalDelete').onclick=()=>{ onDelete(); closeModal(); };
+  } else {
+    $('#modalDelete').style.display='none';
+    $('#modalDelete').onclick=null;
+  }
 }
 function closeModal(){
   $('#modal').style.display='none';
@@ -477,7 +491,7 @@ function openShotForm(existing){
       body.append(formRow(`<div><div class="small">Title</div><input id="sbTitle" value="${board.title}"></div>`));
       body.append(formRow(`<div id="sbShots" style="display:flex;flex-direction:column;gap:10px"></div>`));
       body.append(formRow(`<button class="btn" type="button" id="sbAddShot">+ Add Shot</button>`));
-    }, async ()=>{
+    }, ()=>{
       board.title = $('#sbTitle').value.trim();
       const container = $('#sbShots');
       const items = Array.from(container.querySelectorAll('.sbItem'));
@@ -489,23 +503,40 @@ function openShotForm(existing){
         const shot = item.querySelector('.sbShot').value.trim();
         const camera = item.querySelector('.sbCamera').value.trim();
         const notes = item.querySelector('.sbNotes').value.trim();
-        const file = item.querySelector('.sbImage').files[0];
-        let image = item.dataset.image || '';
-        if(file){
-          image = await new Promise(res=>{ const r=new FileReader(); r.onload=e=>res(e.target.result); r.readAsDataURL(file); });
-        }
+        const image = item.dataset.image || '';
         board.shots.push({id, sequence:seq, scene, shot, camera, notes, image});
         let sh = store.shots.find(x=>x.id===id);
         if(!sh){ sh={id, projectId:'', sequence:seq, scene, shot, vendor:'', status:'Bid', due:'', notes}; store.shots.push(sh); }
         else { Object.assign(sh,{sequence:seq, scene, shot, notes}); }
       }
       if(!existing) store.storyboards.push(board);
-      save(store);
+      try{ save(store); }
+      catch(err){ if(!existing) store.storyboards.pop(); alert('Unable to save storyboard. Storage may be full.'); return; }
       closeModal();
       render();
     }, existing ? ()=>{ store.storyboards = store.storyboards.filter(x=>x.id!==existing.id); save(store); renderStoryboards(); } : null);
 
     const container = $('#sbShots');
+    async function resizeImage(file){
+      const maxH = window.innerHeight/3;
+      return new Promise(res=>{
+        const reader=new FileReader();
+        reader.onload=e=>{
+          const img=new Image();
+          img.onload=()=>{
+            const h=Math.min(maxH,img.height);
+            const w=img.width*h/img.height;
+            const canvas=document.createElement('canvas');
+            canvas.width=w; canvas.height=h;
+            const ctx=canvas.getContext('2d');
+            ctx.drawImage(img,0,0,w,h);
+            res(canvas.toDataURL('image/jpeg',0.8));
+          };
+          img.src=e.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
     function addShotRow(data){
       const id = data?.id || uid();
       const div = document.createElement('div');
@@ -522,7 +553,7 @@ function openShotForm(existing){
           <div class="space"><input class="sbCamera" placeholder="Camera" value="${data?.camera||''}"></div>
           <div class="space"><input class="sbImage" type="file" accept="image/*"></div>
         </div>
-        ${data?.image?`<img src="${data.image}" style="width:100%;margin-top:6px">`:''}
+        ${data?.image?`<img class="sbPreview" src="${data.image}" style="width:100%;margin-top:6px;height:calc(100vh/3);object-fit:cover">`:''}
         <textarea class="sbNotes" placeholder="Notes" style="margin-top:6px">${data?.notes||''}</textarea>
         <div class="row" style="margin-top:6px">
           <button class="btn sbUp" type="button">↑</button>
@@ -531,6 +562,21 @@ function openShotForm(existing){
           <button class="btn sbRemove" type="button">Remove</button>
         </div>`;
       container.appendChild(div);
+      const fileInput = div.querySelector('.sbImage');
+      fileInput.onchange=async()=>{
+        if(!fileInput.files[0]) return;
+        const imgData = await resizeImage(fileInput.files[0]);
+        div.dataset.image = imgData;
+        let prev = div.querySelector('.sbPreview');
+        if(!prev){
+          prev=document.createElement('img');
+          prev.className='sbPreview';
+          prev.style='width:100%;margin-top:6px;height:calc(100vh/3);object-fit:cover';
+          const notes=div.querySelector('.sbNotes');
+          div.insertBefore(prev, notes);
+        }
+        prev.src = imgData;
+      };
       div.querySelector('.sbUp').onclick=()=>{ if(div.previousElementSibling) container.insertBefore(div, div.previousElementSibling); };
       div.querySelector('.sbDown').onclick=()=>{ if(div.nextElementSibling) container.insertBefore(div.nextElementSibling, div); };
       div.querySelector('.sbRemove').onclick=()=>div.remove();
@@ -547,7 +593,7 @@ function openShotForm(existing){
         <h3>${sb.title||'Storyboard'}</h3>
         ${sb.shots.map(sh=>`
           <div style="margin-top:8px">
-            ${sh.image?`<img src="${sh.image}" style="width:100%">`:''}
+            ${sh.image?`<img src="${sh.image}" style="width:100%;height:calc(100vh/3);object-fit:cover">`:''}
             <div class="small">${sh.sequence||'SEQ'} / ${sh.scene||'SC'} / ${sh.shot||'SHOT'}${sh.camera?(' • Camera: '+sh.camera):''}</div>
             <div class="small">${sh.notes||''}</div>
           </div>
