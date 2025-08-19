@@ -59,14 +59,9 @@ textarea{min-height:90px;resize:vertical}
 .item+.item{margin-top:10px}
 .item h3{margin:0}
 .kicker{font-size:12px;color:var(--muted)}
-/* Install guide */
-#installOverlay{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;text-align:center;z-index:1000;padding:20px}
-#installOverlay .box{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:20px;max-width:320px;width:100%}
-#installOverlay .platforms{display:flex;justify-content:center;gap:14px;margin:10px 0}
-#installOverlay .platforms button{background:none;border:none;font-size:32px;cursor:pointer;color:var(--text)}
-#installOverlay .title{font-weight:900;margin-bottom:10px}
-#installInstructions{font-size:14px;line-height:1.4}
-#installInstructions div{margin-top:8px}
+/* Install banner */
+#installBanner{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;text-align:center;z-index:1000;padding:20px}
+#installBanner .box{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:20px;max-width:320px;width:100%}
 /* Modal */
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:flex-end;z-index:50}
     .sheet{width:100%;max-width:520px;margin:0 auto;background:linear-gradient(180deg,#151e29,#111822);border-top-left-radius:16px;border-top-right-radius:16px;border:1px solid var(--line);padding:14px;box-shadow:0 -10px 30px rgba(0,0,0,.35);max-height:90vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
@@ -176,19 +171,12 @@ textarea{min-height:90px;resize:vertical}
     <div id="notesList" style="margin-top:10px"></div>
   </section>
 
-  <div class="footer" id="showInstall">Add to Home Screen</div>
-</div>
+ </div>
 
-<div id="installOverlay">
+<div id="installBanner">
   <div class="box">
-    <div class="title">Install</div>
-    <div class="platforms">
-      <button id="install-ios" aria-label="iOS"></button>
-      <button id="install-android" aria-label="Android">🤖</button>
-      <button id="install-windows" aria-label="Windows">🪟</button>
-    </div>
-    <div id="installInstructions">Select a platform to view instructions.</div>
-    <button class="btn" id="installClose" type="button" style="margin-top:10px">Close</button>
+    <div>Pridať na plochu – v Safari klepni Zdieľať → Pridať na plochu.</div>
+    <button class="btn" id="installDismiss" type="button" style="margin-top:10px">Rozumiem</button>
   </div>
 </div>
 
@@ -828,42 +816,35 @@ $('#fileImport').addEventListener('change', (ev)=>{
 
 // ---------- Render all ----------
 function render(){ renderCalendar(); renderProjects(); renderStoryboards(); renderShots(); renderTasks(); renderNotes(); }
-function setupInstallGuide(){
-  const INSTALL_KEY='installGuideDismissed';
-  const overlay=document.getElementById('installOverlay');
-  const instructions=document.getElementById('installInstructions');
-  const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
-  const steps={
-    ios:[
-      '<strong>Safari:</strong> Open in Safari → Tap Share → Add to Home Screen.',
-      '<strong>Chrome:</strong> Open in Chrome → Tap Share (⋮) → Add to Home Screen.',
-      '<strong>Firefox:</strong> Open in Firefox → Tap Share → Add to Home Screen.'
-    ],
-    android:[
-      '<strong>Chrome:</strong> Open in Chrome → Tap Menu (⋮) → Add to Home Screen (or Install App).',
-      '<strong>Firefox:</strong> Open in Firefox → Tap Menu (⋮) → Add to Home Screen.',
-      '<strong>Edge:</strong> Open in Edge → Tap Menu (⋮) → Add to Phone.'
-    ],
-    windows:[
-      '<strong>Edge:</strong> Open in Edge → Menu (⋮) → Apps → Install this site as an app.',
-      '<strong>Chrome:</strong> Open in Chrome → Menu (⋮) → Install this site as an app.',
-      '<strong>Firefox:</strong> Firefox does not support direct installation. Use Edge or Chrome instead.'
-    ]
-  };
-  function show(){ overlay.style.display='flex'; }
-  function hide(){ overlay.style.display='none'; localStorage.setItem(INSTALL_KEY,'1'); }
-  document.getElementById('installClose').onclick=hide;
-  document.getElementById('showInstall').onclick=show;
-  ['ios','android','windows'].forEach(p=>{
-    document.getElementById('install-'+p).onclick=()=>{
-      instructions.innerHTML=steps[p].map(t=>`<div>${t}</div>`).join('');
-    };
-  });
-  if(!standalone && !localStorage.getItem(INSTALL_KEY)) show();
+function setupInstallPrompt(){
+  const KEY='installPromptLast';
+  const WAIT=3*24*60*60*1000;
+  const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  if(standalone) return;
+  const last=parseInt(localStorage.getItem(KEY)||'0',10);
+  const due=Date.now()-last>WAIT;
+  const isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent);
+  if(isIOS){
+    if(due){
+      const banner=document.getElementById('installBanner');
+      banner.style.display='flex';
+      document.getElementById('installDismiss').onclick=()=>{
+        banner.style.display='none';
+        localStorage.setItem(KEY,Date.now());
+      };
+    }
+  }else{
+    window.addEventListener('beforeinstallprompt',e=>{
+      if(!due) return;
+      e.preventDefault();
+      e.prompt();
+      localStorage.setItem(KEY,Date.now());
+    },{once:true});
+  }
 }
 function boot(){
   render();
-  setupInstallGuide();
+  setupInstallPrompt();
   if('serviceWorker' in navigator){
     window.addEventListener('load', ()=> navigator.serviceWorker.register('./sw.js').catch(console.error));
   }
