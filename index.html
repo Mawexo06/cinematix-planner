@@ -59,9 +59,13 @@ textarea{min-height:90px;resize:vertical}
 .item+.item{margin-top:10px}
 .item h3{margin:0}
 .kicker{font-size:12px;color:var(--muted)}
-/* Install banner */
-#installBanner{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;text-align:center;z-index:1000;padding:20px}
-#installBanner .box{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:20px;max-width:320px;width:100%}
+/* Install modal */
+#installModal{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;text-align:center;z-index:1000;padding:20px}
+#installModal .box{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:20px;max-width:320px;width:100%}
+#installModal .platforms{display:flex;justify-content:center;gap:14px;margin:10px 0}
+#installModal .platforms button{background:none;border:none;font-size:32px;cursor:pointer;color:var(--text)}
+#installInstructions{font-size:14px;line-height:1.4}
+#installInstructions div{margin-top:8px}
 /* Modal */
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:flex-end;z-index:50}
     .sheet{width:100%;max-width:520px;margin:0 auto;background:linear-gradient(180deg,#151e29,#111822);border-top-left-radius:16px;border-top-right-radius:16px;border:1px solid var(--line);padding:14px;box-shadow:0 -10px 30px rgba(0,0,0,.35);max-height:90vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
@@ -171,12 +175,36 @@ textarea{min-height:90px;resize:vertical}
     <div id="notesList" style="margin-top:10px"></div>
   </section>
 
- </div>
+  <div class="footer" id="showInstall">Add to Home Screen</div>
+</div>
 
-<div id="installBanner">
+<div id="installModal">
   <div class="box">
-    <div>Pridať na plochu – v Safari klepni Zdieľať → Pridať na plochu.</div>
-    <button class="btn" id="installDismiss" type="button" style="margin-top:10px">Rozumiem</button>
+    <div class="title">Install</div>
+    <div class="platforms">
+      <button id="install-ios" aria-label="iOS"></button>
+      <button id="install-android" aria-label="Android">🤖</button>
+      <button id="install-windows" aria-label="Windows">🪟</button>
+    </div>
+    <div id="installInstructions">
+      <div data-platform="ios">
+        <div>Safari: "Open in Safari → Tap Share → Add to Home Screen."</div>
+        <div>Chrome: "Open in Chrome → Tap Share (⋮) → Add to Home Screen."</div>
+        <div>Firefox: "Open in Firefox → Tap Share → Add to Home Screen."</div>
+      </div>
+      <div data-platform="android" style="display:none">
+        <div>Chrome: "Open in Chrome → Tap Menu (⋮) → Install app (or Add to Home Screen)."</div>
+        <div>Firefox: "Open in Firefox → Tap Menu (⋮) → Add to Home Screen."</div>
+        <div>Edge: "Open in Edge → Tap Menu (⋮) → Add to Phone."</div>
+      </div>
+      <div data-platform="windows" style="display:none">
+        <div>Edge: "Open in Edge → Menu (⋮) → Apps → Install this site as an app."</div>
+        <div>Chrome: "Open in Chrome → Menu (⋮) → Install this site as an app."</div>
+        <div>Firefox: "Firefox does not support direct installation. Use Edge or Chrome instead."</div>
+      </div>
+    </div>
+    <button class="btn" id="installNative" type="button" style="display:none;margin-top:10px">Install</button>
+    <button class="btn" id="installClose" type="button" style="margin-top:10px">Close</button>
   </div>
 </div>
 
@@ -816,35 +844,46 @@ $('#fileImport').addEventListener('change', (ev)=>{
 
 // ---------- Render all ----------
 function render(){ renderCalendar(); renderProjects(); renderStoryboards(); renderShots(); renderTasks(); renderNotes(); }
-function setupInstallPrompt(){
-  const KEY='installPromptLast';
+;(function installGate(){
+  const KEY='installModalDismissedAt';
   const WAIT=3*24*60*60*1000;
   const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
   if(standalone) return;
-  const last=parseInt(localStorage.getItem(KEY)||'0',10);
-  const due=Date.now()-last>WAIT;
-  const isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent);
-  if(isIOS){
-    if(due){
-      const banner=document.getElementById('installBanner');
-      banner.style.display='flex';
-      document.getElementById('installDismiss').onclick=()=>{
-        banner.style.display='none';
-        localStorage.setItem(KEY,Date.now());
-      };
-    }
-  }else{
-    window.addEventListener('beforeinstallprompt',e=>{
-      if(!due) return;
-      e.preventDefault();
-      e.prompt();
-      localStorage.setItem(KEY,Date.now());
-    },{once:true});
+  let deferredPrompt=null;
+  const modal=document.getElementById('installModal');
+  const instructions=document.getElementById('installInstructions');
+  const installBtn=document.getElementById('installNative');
+  function showPlatform(p){
+    instructions.querySelectorAll('[data-platform]').forEach(d=>{d.style.display=d.dataset.platform===p?'':'none';});
   }
-}
+  function open(){
+    modal.style.display='flex';
+    const ua=navigator.userAgent;
+    if(/iphone|ipad|ipod/i.test(ua)) showPlatform('ios');
+    else if(/android/i.test(ua)) showPlatform('android');
+    else showPlatform('windows');
+    installBtn.style.display=deferredPrompt?'':'none';
+  }
+  function close(){
+    modal.style.display='none';
+    localStorage.setItem(KEY,Date.now());
+  }
+  document.getElementById('install-ios').onclick=()=>showPlatform('ios');
+  document.getElementById('install-android').onclick=()=>showPlatform('android');
+  document.getElementById('install-windows').onclick=()=>showPlatform('windows');
+  document.getElementById('installClose').onclick=close;
+  document.getElementById('showInstall').onclick=open;
+  installBtn.onclick=()=>{ if(deferredPrompt){ deferredPrompt.prompt(); deferredPrompt=null; installBtn.style.display='none'; } close(); };
+  window.addEventListener('beforeinstallprompt',e=>{
+    e.preventDefault();
+    deferredPrompt=e;
+    if(modal.style.display==='flex') installBtn.style.display='';
+  });
+  const last=parseInt(localStorage.getItem(KEY)||'0',10);
+  if(Date.now()-last>WAIT) open();
+})();
 function boot(){
   render();
-  setupInstallPrompt();
   if('serviceWorker' in navigator){
     window.addEventListener('load', ()=> navigator.serviceWorker.register('./sw.js').catch(console.error));
   }
