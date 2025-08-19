@@ -59,12 +59,16 @@ textarea{min-height:90px;resize:vertical}
 .item+.item{margin-top:10px}
 .item h3{margin:0}
 .kicker{font-size:12px;color:var(--muted)}
-/* Install banner */
-#installBanner{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;text-align:center;z-index:1000;padding:20px}
-#installBanner .box{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:20px;max-width:320px;width:100%}
+/* Install modal */
+#installModal{position:fixed;inset:0;background:rgba(0,0,0,.8);display:none;align-items:center;justify-content:center;text-align:center;z-index:1000;padding:20px}
+#installModal .box{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:20px;max-width:320px;width:100%}
+#installModal .platforms{display:flex;justify-content:center;gap:14px;margin:10px 0}
+#installModal .platforms button{background:none;border:none;font-size:32px;cursor:pointer;color:var(--text)}
+#installInstructions{font-size:14px;line-height:1.4}
+#installInstructions div{margin-top:8px}
 /* Modal */
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:flex-end;z-index:50}
-    .sheet{width:100%;max-width:520px;margin:0 auto;background:linear-gradient(180deg,#151e29,#111822);border-top-left-radius:16px;border-top-right-radius:16px;border:1px solid var(--line);padding:14px;box-shadow:0 -10px 30px rgba(0,0,0,.35);max-height:90vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.sheet{width:100%;max-width:520px;margin:0 auto;background:linear-gradient(180deg,#151e29,#111822);border-top-left-radius:16px;border-top-right-radius:16px;border:1px solid var(--line);padding:14px;box-shadow:0 -10px 30px rgba(0,0,0,.35);max-height:90vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
 .sheet .title{font-weight:900;margin:0 0 8px 0}
 .sheet .grid{display:grid;gap:10px}
 .footer{margin-top:14px;text-align:center;color:var(--muted);font-size:12px;cursor:pointer}
@@ -171,12 +175,36 @@ textarea{min-height:90px;resize:vertical}
     <div id="notesList" style="margin-top:10px"></div>
   </section>
 
- </div>
+  <div class="footer" id="showInstall">Add to Home Screen</div>
+</div>
 
-<div id="installBanner">
+<div id="installModal">
   <div class="box">
-    <div>Pridať na plochu – v Safari klepni Zdieľať → Pridať na plochu.</div>
-    <button class="btn" id="installDismiss" type="button" style="margin-top:10px">Rozumiem</button>
+    <div class="title">Install</div>
+    <div class="platforms">
+      <button id="install-ios" aria-label="iOS"></button>
+      <button id="install-android" aria-label="Android">🤖</button>
+      <button id="install-windows" aria-label="Windows">🪟</button>
+    </div>
+    <div id="installInstructions">
+      <div data-platform="ios">
+        <div>Safari: "Open in Safari → Tap Share → Add to Home Screen."</div>
+        <div>Chrome: "Open in Chrome → Tap Share (⋮) → Add to Home Screen."</div>
+        <div>Firefox: "Open in Firefox → Tap Share → Add to Home Screen."</div>
+      </div>
+      <div data-platform="android" style="display:none">
+        <div>Chrome: "Open in Chrome → Tap Menu (⋮) → Install app (or Add to Home Screen)."</div>
+        <div>Firefox: "Open in Firefox → Tap Menu (⋮) → Add to Home Screen."</div>
+        <div>Edge: "Open in Edge → Tap Menu (⋮) → Add to Phone."</div>
+      </div>
+      <div data-platform="windows" style="display:none">
+        <div>Edge: "Open in Edge → Menu (⋮) → Apps → Install this site as an app."</div>
+        <div>Chrome: "Open in Chrome → Menu (⋮) → Install this site as an app."</div>
+        <div>Firefox: "Firefox does not support direct installation. Use Edge or Chrome instead."</div>
+      </div>
+    </div>
+    <button class="btn" id="installNative" type="button" style="display:none;margin-top:10px">Install</button>
+    <button class="btn" id="installClose" type="button" style="margin-top:10px">Close</button>
   </div>
 </div>
 
@@ -204,14 +232,12 @@ function save(s){
   try{ localStorage.setItem(KEY, JSON.stringify(s)); }
   catch(err){ console.error('Save failed', err); throw err; }
 }
+function normalizeStore(s){
+  const base={projects:[],events:[],tasks:[],shots:[],storyboards:[],notes:[]};
+  return Object.assign(base, s||{});
+}
 function init(){
-  const s = load();
-  s.projects = s.projects||[];
-  s.events = s.events||[];
-  s.tasks = s.tasks||[];
-  s.shots = s.shots||[]; // Shots
-  s.storyboards = s.storyboards||[];
-  s.notes = s.notes||[];
+  const s = normalizeStore(load());
   return s;
 }
 let store = init();
@@ -230,10 +256,24 @@ function getLabel(type,id){
   if(type==='date') return id;
   return type;
 }
+// Safe HTML for note rendering
+function escapeHTML(str){
+  return String(str).replace(/[&<>"']/g, ch=>{
+    switch(ch){case'&':return'&amp;';case'<':return'&lt;';case'>':return'&gt;';case'"':return'&quot;';case"'":return'&#39;';default:return ch;}
+  });
+}
+function escapeAndNl(str){ return escapeHTML(str).replace(/\n/g,'<br>'); }
 function renderNoteText(txt){
-  return txt
-    .replace(/\[\[(\w+):([^\]]+)\]\]/g,(m,type,id)=>`<span class="badge" onclick="openLinked('${type}','${id}')">${getLabel(type,id)}</span>`)
-    .replace(/\n/g,'<br>');
+  const re=/\[\[(\w+):([^\]]+)\]\]/g;
+  let out=[], last=0, m;
+  while((m=re.exec(txt))){
+    if(m.index>last) out.push(escapeAndNl(txt.slice(last,m.index)));
+    const type=m[1], id=m[2];
+    out.push(`<span class="badge" onclick="openLinked('${type}','${id}')">${escapeHTML(getLabel(type,id))}</span>`);
+    last=re.lastIndex;
+  }
+  if(last<txt.length) out.push(escapeAndNl(txt.slice(last)));
+  return out.join('');
 }
 function openLinked(type,id){
   if(type==='project'){ $('.tab[data-tab="projects"]').click(); openProjectForm(store.projects.find(x=>x.id===id)); }
@@ -337,8 +377,8 @@ function showAgenda(ds){
       return `
     <div class="item card">
       <div>
-        <h3>${it.title}</h3>
-        <div class="kicker">${it.type} • ${it.start||''}${it.end?'–'+it.end:''}${it.location?' • '+it.location:''}${it.projectId?' • Project: '+(store.projects.find(p=>p.id===it.projectId)?.title||'') : ''}</div>
+        <h3>${escapeHTML(it.title)}</h3>
+        <div class="kicker">${escapeHTML(it.type)} • ${escapeHTML(it.start||'')}${it.end?'–'+escapeHTML(it.end):''}${it.location?' • '+escapeHTML(it.location):''}${it.projectId?' • Project: '+escapeHTML(store.projects.find(p=>p.id===it.projectId)?.title||''):''}</div>
       </div>
       <div class="row" style="flex-direction:column;gap:8px">
         <button class="btn" onclick="editEvent('${it.id}')">Edit</button>
@@ -349,9 +389,9 @@ function showAgenda(ds){
       return `
     <div class="item card">
       <div>
-        <h3>${it.title}</h3>
+        <h3>${escapeHTML(it.title)}</h3>
         <div class="kicker">Shot</div>
-        <div class="small">${it.notes||''}</div>
+        <div class="small">${escapeHTML(it.notes||'')}</div>
       </div>
       <div class="row" style="flex-direction:column;gap:8px">
         <button class="btn" onclick="openShotForm(store.shots.find(x=>x.id==='${it.id}'))">Edit</button>
@@ -362,9 +402,9 @@ function showAgenda(ds){
       return `
     <div class="item card">
       <div>
-        <h3>${it.title}</h3>
-        <div class="kicker">Task${p?(' • Project: '+p.title):''} • ${it.status}</div>
-        <div class="small">${it.notes||''}</div>
+        <h3>${escapeHTML(it.title)}</h3>
+        <div class="kicker">Task${p?(' • Project: '+escapeHTML(p.title)):''} • ${escapeHTML(it.status)}</div>
+        <div class="small">${escapeHTML(it.notes||'')}</div>
       </div>
       <div class="row" style="flex-direction:column;gap:8px">
         <button class="btn" onclick="editTask('${it.id}')">Edit</button>
@@ -387,18 +427,23 @@ function showAgenda(ds){
 }
 $('#quickAddEvent').onclick=()=>openEventForm();
 
-function openEventForm(existing){
-  let data = existing || {id:uid(), title:'', type:'Shoot', date:selectedDate, start:'', end:'', location:'', projectId:''};
-  openModal(existing?'Edit Event':'New Event', (body)=>{
-    body.append(formRow(`<div><div class="small">Title</div><input id="evTitle" value="${data.title}"></div>`));
+// NEW: supports existing vs prefill
+function openEventForm(existing=null, prefill={}){
+  const isExisting = !!existing && !!store.events.find(e=>e.id===existing.id);
+  let data = isExisting
+    ? {...existing}
+    : {id:uid(), title:'', type:'Shoot', date:selectedDate, start:'', end:'', location:'', projectId:(prefill.projectId||'')};
+
+  openModal(isExisting?'Edit Event':'New Event', (body)=>{
+    body.append(formRow(`<div><div class="small">Title</div><input id="evTitle" value="${escapeHTML(data.title)}"></div>`));
     body.append(formRow(`<div><div class="small">Type</div><select id="evType">
       ${['Shoot','Deadline','Review','Delivery','Shot'].map(t=>`<option ${data.type===t?'selected':''}>${t}</option>`).join('')}
     </select></div>`));
     body.append(formRow(`<div class="row"><div class="space"><div class="small">Date</div><input id="evDate" type="date" value="${data.date}"></div>
       <div class="space"><div class="small">Start</div><input id="evStart" type="time" value="${data.start}"></div>
       <div class="space"><div class="small">End</div><input id="evEnd" type="time" value="${data.end}"></div></div>`));
-    body.append(formRow(`<div><div class="small">Location</div><input id="evLoc" value="${data.location}"></div>`));
-    body.append(formRow(`<div><div class="small">Project</div><select id="evProj"><option value="">—</option>${store.projects.map(p=>`<option value="${p.id}" ${p.id===data.projectId?'selected':''}>${p.title}</option>`).join('')}</select></div>`));
+    body.append(formRow(`<div><div class="small">Location</div><input id="evLoc" value="${escapeHTML(data.location)}"></div>`));
+    body.append(formRow(`<div><div class="small">Project</div><select id="evProj"><option value="">—</option>${store.projects.map(p=>`<option value="${p.id}" ${p.id===data.projectId?'selected':''}>${escapeHTML(p.title)}</option>`).join('')}</select></div>`));
   }, ()=>{
     data.title = $('#evTitle').value.trim()||'Untitled';
     data.type = $('#evType').value;
@@ -407,9 +452,9 @@ function openEventForm(existing){
     data.end = $('#evEnd').value;
     data.location = $('#evLoc').value;
     data.projectId = $('#evProj').value;
-    if(!existing) store.events.push(data);
+    if(!isExisting) store.events.push(data);
     save(store); closeModal(); render();
-  }, existing ? ()=>{ store.events = store.events.filter(x=>x.id!==existing.id); save(store); render(); } : null);
+  }, isExisting ? ()=>{ store.events = store.events.filter(x=>x.id!==existing.id); save(store); render(); } : null);
 }
 function editEvent(id){ const e = store.events.find(x=>x.id===id); if(e) openEventForm(e); }
 function removeEvent(id){ store.events = store.events.filter(e=>e.id!==id); save(store); render(); }
@@ -420,11 +465,11 @@ $('#projSearch').addEventListener('input', renderProjects);
 function openProjectForm(existing){
   let p = existing || {id:uid(), title:'', client:'', color:'#7ca7ff', due:'', notes:''};
   openModal(existing?'Edit Project':'New Project', (body)=>{
-    body.append(formRow(`<div><div class="small">Title</div><input id="pTitle" value="${p.title}"></div>`));
-    body.append(formRow(`<div><div class="small">Client / Production</div><input id="pClient" value="${p.client}"></div>`));
+    body.append(formRow(`<div><div class="small">Title</div><input id="pTitle" value="${escapeHTML(p.title)}"></div>`));
+    body.append(formRow(`<div><div class="small">Client / Production</div><input id="pClient" value="${escapeHTML(p.client)}"></div>`));
     body.append(formRow(`<div class="row"><div class="space"><div class="small">Color</div><input id="pColor" type="color" value="${p.color}"></div>
       <div class="space"><div class="small">Due</div><input id="pDue" type="date" value="${p.due}"></div></div>`));
-    body.append(formRow(`<div><div class="small">Notes</div><textarea id="pNotes">${p.notes}</textarea></div>`));
+    body.append(formRow(`<div><div class="small">Notes</div><textarea id="pNotes">${escapeHTML(p.notes)}</textarea></div>`));
   }, ()=>{
     p.title=$('#pTitle').value.trim()||'Untitled';
     p.client=$('#pClient').value;
@@ -443,12 +488,12 @@ function renderProjects(){
   if(items.length===0){ list.innerHTML='<div class="card small">No projects yet. Tap <b>+ Project</b>.</div>'; return; }
   list.innerHTML = items.map(p=>`<div class="item card">
     <div>
-      <h3>${p.title}</h3>
-      <div class="kicker">${p.client||''}</div>
+      <h3>${escapeHTML(p.title)}</h3>
+      <div class="kicker">${escapeHTML(p.client||'')}</div>
       <div class="kicker">Due: ${p.due?fmt(p.due):'—'}</div>
       <div class="row" style="margin-top:8px">
         <span class="badge" style="border-color:${p.color};color:${p.color}">Project</span>
-        <button class="btn" onclick="openEventForm({id:'${p.id}', projectId:'${p.id}', title:'', type:'Shoot', date:'', start:'', end:'', location:''})">+ Event</button>
+        <button class="btn" onclick="openEventForm(null,{projectId:'${p.id}'})">+ Event</button>
         <button class="btn" onclick="openTaskForm({projectId:'${p.id}'})">+ Task</button>
       </div>
     </div>
@@ -467,19 +512,19 @@ function openShotForm(existing){
   let s = existing || {id:uid(), projectId:'', sequence:'', scene:'', shot:'', vendor:'', status:'Bid', due:'', notes:''};
   openModal(existing?'Edit Shot':'New Shot', (body)=>{
     body.append(formRow(`<div class="row">
-      <div class="space"><div class="small">Project</div><select id="sProj"><option value="">—</option>${store.projects.map(p=>`<option value="${p.id}" ${p.id===s.projectId?'selected':''}>${p.title}</option>`).join('')}</select></div>
+      <div class="space"><div class="small">Project</div><select id="sProj"><option value="">—</option>${store.projects.map(p=>`<option value="${p.id}" ${p.id===s.projectId?'selected':''}>${escapeHTML(p.title)}</option>`).join('')}</select></div>
       <div class="space"><div class="small">Status</div><select id="sStatus">${['Bid','WIP','Review','Final'].map(x=>`<option ${s.status===x?'selected':''}>${x}</option>`).join('')}</select></div>
     </div>`));
     body.append(formRow(`<div class="row">
-      <div class="space"><div class="small">Sequence</div><input id="sSeq" value="${s.sequence}"></div>
-      <div class="space"><div class="small">Scene</div><input id="sScene" value="${s.scene}"></div>
-      <div class="space"><div class="small">Shot</div><input id="sShot" value="${s.shot}"></div>
+      <div class="space"><div class="small">Sequence</div><input id="sSeq" value="${escapeHTML(s.sequence)}"></div>
+      <div class="space"><div class="small">Scene</div><input id="sScene" value="${escapeHTML(s.scene)}"></div>
+      <div class="space"><div class="small">Shot</div><input id="sShot" value="${escapeHTML(s.shot)}"></div>
     </div>`));
     body.append(formRow(`<div class="row">
-      <div class="space"><div class="small">Vendor</div><input id="sVendor" value="${s.vendor}"></div>
+      <div class="space"><div class="small">Vendor</div><input id="sVendor" value="${escapeHTML(s.vendor)}"></div>
       <div class="space"><div class="small">Due</div><input id="sDue" type="date" value="${s.due}"></div>
     </div>`));
-    body.append(formRow(`<div><div class="small">Notes</div><textarea id="sNotes">${s.notes}</textarea></div>`));
+    body.append(formRow(`<div><div class="small">Notes</div><textarea id="sNotes">${escapeHTML(s.notes)}</textarea></div>`));
   }, ()=>{
     s.projectId = $('#sProj').value;
     s.status = $('#sStatus').value;
@@ -492,130 +537,130 @@ function openShotForm(existing){
     if(!existing) store.shots.push(s);
     save(store); closeModal(); render();
   }, existing ? ()=>{ store.shots = store.shots.filter(x=>x.id!==existing.id); save(store); render(); } : null);
-  }
+}
 
-  function openStoryboardForm(existing){
-    let board = existing || {id:uid(), title:'', shots:[]};
-    openModal(existing?'Edit Storyboard':'New Storyboard', (body)=>{
-      body.append(formRow(`<div><div class="small">Title</div><input id="sbTitle" value="${board.title}"></div>`));
-      body.append(formRow(`<div id="sbShots" style="display:flex;flex-direction:column;gap:10px"></div>`));
-      body.append(formRow(`<button class="btn" type="button" id="sbAddShot">+ Add Shot</button>`));
-    }, ()=>{
-      board.title = $('#sbTitle').value.trim();
-      const container = $('#sbShots');
-      const items = Array.from(container.querySelectorAll('.sbItem'));
-      board.shots = [];
-      for(const item of items){
-        const id = item.dataset.id || uid();
-        const seq = item.querySelector('.sbSeq').value.trim();
-        const scene = item.querySelector('.sbScene').value.trim();
-        const shot = item.querySelector('.sbShot').value.trim();
-        const camera = item.querySelector('.sbCamera').value.trim();
-        const notes = item.querySelector('.sbNotes').value.trim();
-        const image = item.dataset.image || '';
-        board.shots.push({id, sequence:seq, scene, shot, camera, notes, image});
-        let sh = store.shots.find(x=>x.id===id);
-        if(!sh){ sh={id, projectId:'', sequence:seq, scene, shot, vendor:'', status:'Bid', due:'', notes}; store.shots.push(sh); }
-        else { Object.assign(sh,{sequence:seq, scene, shot, notes}); }
-      }
-      if(!existing) store.storyboards.push(board);
-      try{ save(store); }
-      catch(err){ if(!existing) store.storyboards.pop(); alert('Unable to save storyboard. Storage may be full.'); return; }
-      closeModal();
-      render();
-    }, existing ? ()=>{ store.storyboards = store.storyboards.filter(x=>x.id!==existing.id); save(store); renderStoryboards(); } : null);
-
+function openStoryboardForm(existing){
+  let board = existing || {id:uid(), title:'', shots:[]};
+  openModal(existing?'Edit Storyboard':'New Storyboard', (body)=>{
+    body.append(formRow(`<div><div class="small">Title</div><input id="sbTitle" value="${escapeHTML(board.title)}"></div>`));
+    body.append(formRow(`<div id="sbShots" style="display:flex;flex-direction:column;gap:10px"></div>`));
+    body.append(formRow(`<button class="btn" type="button" id="sbAddShot">+ Add Shot</button>`));
+  }, ()=>{
+    board.title = $('#sbTitle').value.trim();
     const container = $('#sbShots');
-    async function resizeImage(file){
-      const maxH = window.innerHeight/3;
-      return new Promise(res=>{
-        const reader=new FileReader();
-        reader.onload=e=>{
-          const img=new Image();
-          img.onload=()=>{
-            const h=Math.min(maxH,img.height);
-            const w=img.width*h/img.height;
-            const canvas=document.createElement('canvas');
-            canvas.width=w; canvas.height=h;
-            const ctx=canvas.getContext('2d');
-            ctx.drawImage(img,0,0,w,h);
-            res(canvas.toDataURL('image/jpeg',0.8));
-          };
-          img.src=e.target.result;
+    const items = Array.from(container.querySelectorAll('.sbItem'));
+    board.shots = [];
+    for(const item of items){
+      const id = item.dataset.id || uid();
+      const seq = item.querySelector('.sbSeq').value.trim();
+      const scene = item.querySelector('.sbScene').value.trim();
+      const shot = item.querySelector('.sbShot').value.trim();
+      const camera = item.querySelector('.sbCamera').value.trim();
+      const notes = item.querySelector('.sbNotes').value.trim();
+      const image = item.dataset.image || '';
+      board.shots.push({id, sequence:seq, scene, shot, camera, notes, image});
+      let sh = store.shots.find(x=>x.id===id);
+      if(!sh){ sh={id, projectId:'', sequence:seq, scene, shot, vendor:'', status:'Bid', due:'', notes}; store.shots.push(sh); }
+      else { Object.assign(sh,{sequence:seq, scene, shot, notes}); }
+    }
+    if(!existing) store.storyboards.push(board);
+    try{ save(store); }
+    catch(err){ if(!existing) store.storyboards.pop(); alert('Unable to save storyboard. Storage may be full.'); return; }
+    closeModal();
+    render();
+  }, existing ? ()=>{ store.storyboards = store.storyboards.filter(x=>x.id!==existing.id); save(store); renderStoryboards(); } : null);
+
+  const container = $('#sbShots');
+  async function resizeImage(file){
+    const maxH = window.innerHeight/3;
+    return new Promise(res=>{
+      const reader=new FileReader();
+      reader.onload=e=>{
+        const img=new Image();
+        img.onload=()=>{
+          const h=Math.min(maxH,img.height);
+          const w=img.width*h/img.height;
+          const canvas=document.createElement('canvas');
+          canvas.width=w; canvas.height=h;
+          const ctx=canvas.getContext('2d');
+          ctx.drawImage(img,0,0,w,h);
+          res(canvas.toDataURL('image/jpeg',0.8));
         };
-        reader.readAsDataURL(file);
-      });
-    }
-    function addShotRow(data){
-      const id = data?.id || uid();
-      const div = document.createElement('div');
-      div.className='card sbItem';
-      div.dataset.id = id;
-      div.dataset.image = data?.image||'';
-      div.innerHTML = `
-        <div class="row">
-          <div class="space"><input class="sbSeq" placeholder="Seq" value="${data?.sequence||''}"></div>
-          <div class="space"><input class="sbScene" placeholder="Scene" value="${data?.scene||''}"></div>
-          <div class="space"><input class="sbShot" placeholder="Shot" value="${data?.shot||''}"></div>
-        </div>
-        <div class="row" style="margin-top:6px">
-          <div class="space"><input class="sbCamera" placeholder="Camera" value="${data?.camera||''}"></div>
-          <div class="space"><input class="sbImage" type="file" accept="image/*"></div>
-        </div>
-        ${data?.image?`<img class="sbPreview" src="${data.image}" style="width:100%;margin-top:6px;height:calc(100vh/3);object-fit:cover">`:''}
-        <textarea class="sbNotes" placeholder="Notes" style="margin-top:6px">${data?.notes||''}</textarea>
-        <div class="row" style="margin-top:6px">
-          <button class="btn sbUp" type="button">↑</button>
-          <button class="btn sbDown" type="button">↓</button>
-          <div class="space"></div>
-          <button class="btn sbRemove" type="button">Remove</button>
-        </div>`;
-      container.appendChild(div);
-      const fileInput = div.querySelector('.sbImage');
-      fileInput.onchange=async()=>{
-        if(!fileInput.files[0]) return;
-        const imgData = await resizeImage(fileInput.files[0]);
-        div.dataset.image = imgData;
-        let prev = div.querySelector('.sbPreview');
-        if(!prev){
-          prev=document.createElement('img');
-          prev.className='sbPreview';
-          prev.style='width:100%;margin-top:6px;height:calc(100vh/3);object-fit:cover';
-          const notes=div.querySelector('.sbNotes');
-          div.insertBefore(prev, notes);
-        }
-        prev.src = imgData;
+        img.src=e.target.result;
       };
-      div.querySelector('.sbUp').onclick=()=>{ if(div.previousElementSibling) container.insertBefore(div, div.previousElementSibling); };
-      div.querySelector('.sbDown').onclick=()=>{ if(div.nextElementSibling) container.insertBefore(div.nextElementSibling, div); };
-      div.querySelector('.sbRemove').onclick=()=>div.remove();
-    }
-    $('#sbAddShot').onclick=()=>addShotRow();
-    if(existing) existing.shots.forEach(addShotRow);
+      reader.readAsDataURL(file);
+    });
   }
-
-  function renderStoryboards(){
-    const list = $('#storyboardsList'); list.innerHTML='';
-    if(!store.storyboards.length){ list.innerHTML='<div class="card small">No storyboards yet. Tap <b>+ Storyboard</b>.</div>'; return; }
-    list.innerHTML = store.storyboards.map(sb=>`
-      <div class="card">
-        <h3>${sb.title||'Storyboard'}</h3>
-        ${sb.shots.map(sh=>`
-          <div style="margin-top:8px">
-            ${sh.image?`<img src="${sh.image}" style="width:100%;height:calc(100vh/3);object-fit:cover">`:''}
-            <div class="small">${sh.sequence||'SEQ'} / ${sh.scene||'SC'} / ${sh.shot||'SHOT'}${sh.camera?(' • Camera: '+sh.camera):''}</div>
-            <div class="small">${sh.notes||''}</div>
-          </div>
-        `).join('')}
-        <div class="row" style="margin-top:8px">
-          <button class="btn" onclick="openStoryboardForm(store.storyboards.find(x=>x.id==='${sb.id}'))">Edit</button>
-          <button class="btn" onclick="(function(){ store.storyboards=store.storyboards.filter(x=>x.id!=='${sb.id}'); save(store); renderStoryboards(); })()">Delete</button>
-        </div>
+  function addShotRow(data){
+    const id = data?.id || uid();
+    const div = document.createElement('div');
+    div.className='card sbItem';
+    div.dataset.id = id;
+    div.dataset.image = data?.image||'';
+    div.innerHTML = `
+      <div class="row">
+        <div class="space"><input class="sbSeq" placeholder="Seq" value="${escapeHTML(data?.sequence||'')}"></div>
+        <div class="space"><input class="sbScene" placeholder="Scene" value="${escapeHTML(data?.scene||'')}"></div>
+        <div class="space"><input class="sbShot" placeholder="Shot" value="${escapeHTML(data?.shot||'')}"></div>
       </div>
-    `).join('');
+      <div class="row" style="margin-top:6px">
+        <div class="space"><input class="sbCamera" placeholder="Camera" value="${escapeHTML(data?.camera||'')}"></div>
+        <div class="space"><input class="sbImage" type="file" accept="image/*"></div>
+      </div>
+      ${data?.image?`<img class="sbPreview" src="${data.image}" style="width:100%;margin-top:6px;height:calc(100vh/3);object-fit:cover">`:''}
+      <textarea class="sbNotes" placeholder="Notes" style="margin-top:6px">${escapeHTML(data?.notes||'')}</textarea>
+      <div class="row" style="margin-top:6px">
+        <button class="btn sbUp" type="button">↑</button>
+        <button class="btn sbDown" type="button">↓</button>
+        <div class="space"></div>
+        <button class="btn sbRemove" type="button">Remove</button>
+      </div>`;
+    container.appendChild(div);
+    const fileInput = div.querySelector('.sbImage');
+    fileInput.onchange=async()=>{
+      if(!fileInput.files[0]) return;
+      const imgData = await resizeImage(fileInput.files[0]);
+      div.dataset.image = imgData;
+      let prev = div.querySelector('.sbPreview');
+      if(!prev){
+        prev=document.createElement('img');
+        prev.className='sbPreview';
+        prev.style='width:100%;margin-top:6px;height:calc(100vh/3);object-fit:cover';
+        const notes=div.querySelector('.sbNotes');
+        div.insertBefore(prev, notes);
+      }
+      prev.src = imgData;
+    };
+    div.querySelector('.sbUp').onclick=()=>{ if(div.previousElementSibling) container.insertBefore(div, div.previousElementSibling); };
+    div.querySelector('.sbDown').onclick=()=>{ if(div.nextElementSibling) container.insertBefore(div.nextElementSibling, div); };
+    div.querySelector('.sbRemove').onclick=()=>div.remove();
   }
+  $('#sbAddShot').onclick=()=>addShotRow();
+  if(existing) existing.shots.forEach(addShotRow);
+}
 
-  function renderShots(){
+function renderStoryboards(){
+  const list = $('#storyboardsList'); list.innerHTML='';
+  if(!store.storyboards.length){ list.innerHTML='<div class="card small">No storyboards yet. Tap <b>+ Storyboard</b>.</div>'; return; }
+  list.innerHTML = store.storyboards.map(sb=>`
+    <div class="card">
+      <h3>${escapeHTML(sb.title||'Storyboard')}</h3>
+      ${sb.shots.map(sh=>`
+        <div style="margin-top:8px">
+          ${sh.image?`<img src="${sh.image}" style="width:100%;height:calc(100vh/3);object-fit:cover">`:''}
+          <div class="small">${escapeHTML(sh.sequence||'SEQ')} / ${escapeHTML(sh.scene||'SC')} / ${escapeHTML(sh.shot||'SHOT')}${sh.camera?(' • Camera: '+escapeHTML(sh.camera)) : ''}</div>
+          <div class="small">${escapeHTML(sh.notes||'')}</div>
+        </div>
+      `).join('')}
+      <div class="row" style="margin-top:8px">
+        <button class="btn" onclick="openStoryboardForm(store.storyboards.find(x=>x.id==='${sb.id}'))">Edit</button>
+        <button class="btn" onclick="(function(){ store.storyboards=store.storyboards.filter(x=>x.id!=='${sb.id}'); save(store); renderStoryboards(); })()">Delete</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderShots(){
   const f = $('#shotStatusFilter').value;
   const list = $('#shotsList'); list.innerHTML='';
   let items = store.shots.slice().sort((a,b)=>(a.due||'').localeCompare(b.due||''));
@@ -626,12 +671,12 @@ function openShotForm(existing){
     const badge = `<span class="badge ${s.status==='Final'?'ok':(s.status==='Review'?'warn':(s.status==='WIP'?'':'danger'))}">${s.status}</span>`;
     return `<div class="item card">
       <div>
-        <h3>${s.sequence || 'SEQ'} / ${s.scene || 'SC'} / ${s.shot || 'SHOT'}</h3>
+        <h3>${escapeHTML(s.sequence || 'SEQ')} / ${escapeHTML(s.scene || 'SC')} / ${escapeHTML(s.shot || 'SHOT')}</h3>
         <div class="row" style="gap:6px;align-items:center;flex-wrap:wrap">
           ${badge}
-          <div class="kicker">${p?('Project: '+p.title+' • '):''}Vendor: ${s.vendor||'—'} • Due: ${s.due?fmt(s.due):'—'}</div>
+          <div class="kicker">${p?('Project: '+escapeHTML(p.title)+' • '):''}Vendor: ${escapeHTML(s.vendor||'—')} • Due: ${s.due?fmt(s.due):'—'}</div>
         </div>
-        <div class="small">${s.notes||''}</div>
+        <div class="small">${escapeHTML(s.notes||'')}</div>
       </div>
       <div class="row" style="flex-direction:column;gap:8px">
         <button class="btn" onclick="openShotForm(store.shots.find(x=>x.id==='${s.id}'))">Edit</button>
@@ -649,29 +694,29 @@ $('#noteFilter').addEventListener('change', renderNotes);
 function openTaskForm(prefill){
   let t = {id:uid(), projectId:prefill?.projectId||'', title:'', due:'', status:'Open', notes:''};
   openModal('New Task', (body)=>{
-    body.append(formRow(`<div><div class="small">Title</div><input id="tTitle" value="${t.title}"></div>`));
-    body.append(formRow(`<div class="row"><div class="space"><div class="small">Project</div><select id="tProj"><option value="">—</option>${store.projects.map(p=>`<option value="${p.id}" ${p.id===t.projectId?'selected':''}>${p.title}</option>`).join('')}</select></div>
+    body.append(formRow(`<div><div class="small">Title</div><input id="tTitle" value="${escapeHTML(t.title)}"></div>`));
+    body.append(formRow(`<div class="row"><div class="space"><div class="small">Project</div><select id="tProj"><option value="">—</option>${store.projects.map(p=>`<option value="${p.id}" ${p.id===t.projectId?'selected':''}>${escapeHTML(p.title)}</option>`).join('')}</select></div>
       <div class="space"><div class="small">Due</div><input id="tDue" type="date" value="${t.due}"></div></div>`));
     body.append(formRow(`<div class="row"><div class="space"><div class="small">Status</div><select id="tStatus">${['Open','In Progress','Blocked','Done'].map(x=>`<option>${x}</option>`).join('')}</select></div></div>`));
-    body.append(formRow(`<div><div class="small">Notes</div><textarea id="tNotes">${t.notes}</textarea></div>`));
+    body.append(formRow(`<div><div class="small">Notes</div><textarea id="tNotes">${escapeHTML(t.notes)}</textarea></div>`));
   }, ()=>{
     t.title = $('#tTitle').value.trim()||'Untitled Task';
     t.projectId = $('#tProj').value;
     t.due = $('#tDue').value;
     t.status = $('#tStatus').value;
     t.notes = $('#tNotes').value;
-  store.tasks.push(t); save(store); closeModal(); render();
+    store.tasks.push(t); save(store); closeModal(); render();
   });
 }
 
 function editTask(id){
   const tt = store.tasks.find(x=>x.id===id); if(!tt) return;
   openModal('Edit Task', (body)=>{
-    body.append(formRow(`<div><div class="small">Title</div><input id="tTitle" value="${tt.title}"></div>`));
-    body.append(formRow(`<div class="row"><div class="space"><div class="small">Project</div><select id="tProj"><option value="">—</option>${store.projects.map(p=>`<option value="${p.id}" ${p.id===tt.projectId?'selected':''}>${p.title}</option>`).join('')}</select></div>
+    body.append(formRow(`<div><div class="small">Title</div><input id="tTitle" value="${escapeHTML(tt.title)}"></div>`));
+    body.append(formRow(`<div class="row"><div class="space"><div class="small">Project</div><select id="tProj"><option value="">—</option>${store.projects.map(p=>`<option value="${p.id}" ${p.id===tt.projectId?'selected':''}>${escapeHTML(p.title)}</option>`).join('')}</select></div>
       <div class="space"><div class="small">Due</div><input id="tDue" type="date" value="${tt.due||''}"></div></div>`));
     body.append(formRow(`<div class="row"><div class="space"><div class="small">Status</div><select id="tStatus">${['Open','In Progress','Blocked','Done'].map(x=>`<option ${tt.status===x?'selected':''}>${x}</option>`).join('')}</select></div></div>`));
-    body.append(formRow(`<div><div class="small">Notes</div><textarea id="tNotes">${tt.notes||''}</textarea></div>`));
+    body.append(formRow(`<div><div class="small">Notes</div><textarea id="tNotes">${escapeHTML(tt.notes||'')}</textarea></div>`));
   }, ()=>{
     tt.title=$('#tTitle').value; tt.projectId=$('#tProj').value; tt.due=$('#tDue').value; tt.status=$('#tStatus').value; tt.notes=$('#tNotes').value;
     save(store); closeModal(); render();
@@ -687,9 +732,9 @@ function renderTasks(){
     const p = store.projects.find(x=>x.id===t.projectId);
     return `<div class="item card">
       <div>
-        <h3>${t.title}</h3>
-        <div class="kicker">${p?('Project: '+p.title+' • '):''}Due: ${t.due?fmt(t.due):'—'} • ${t.status}</div>
-        <div class="small">${t.notes||''}</div>
+        <h3>${escapeHTML(t.title)}</h3>
+        <div class="kicker">${p?('Project: '+escapeHTML(p.title)+' • '):''}Due: ${t.due?fmt(t.due):'—'} • ${escapeHTML(t.status)}</div>
+        <div class="small">${escapeHTML(t.notes||'')}</div>
       </div>
       <div class="row" style="flex-direction:column;gap:8px">
         <button class="btn" onclick="editTask('${t.id}')">Edit</button>
@@ -703,28 +748,28 @@ function renderTasks(){
 function openNoteForm(existing){
   let n = existing || {id:uid(), text:'', tags:[]};
   openModal(existing?'Edit Note':'New Note', (body)=>{
-    body.append(formRow(`<div><div class="small">Text</div><textarea id="nText">${n.text}</textarea></div>`));
+    body.append(formRow(`<div><div class="small">Text</div><textarea id="nText">${escapeHTML(n.text)}</textarea></div>`));
     body.append(formRow(`<div id="nTags" style="display:flex;flex-direction:column;gap:6px"></div>`));
     body.append(formRow(`<button class="btn" type="button" id="nAddTag">+ Tag</button>`));
     body.append(formRow(`<button class="btn" type="button" id="nInsertLink">Insert Link</button>`));
-    }, ()=>{
-      n.text = $('#nText').value;
-      const tags=[];
-      $('#nTags').querySelectorAll('.tagRow').forEach(row=>{
-        const type=row.querySelector('.tagType').value;
-        const val=row.querySelector('.tagValue')?.value;
-        if(type && val) tags.push({type,id:val});
-      });
-      n.tags = tags;
-      if(!existing) store.notes.push(n);
-      save(store);
-      closeModal();
-      render();
-    }, existing ? ()=>{
-      store.notes = store.notes.filter(x=>x.id!==existing.id);
-      save(store);
-      render();
-    } : null);
+  }, ()=>{
+    n.text = $('#nText').value;
+    const tags=[];
+    $('#nTags').querySelectorAll('.tagRow').forEach(row=>{
+      const type=row.querySelector('.tagType').value;
+      const val=row.querySelector('.tagValue')?.value;
+      if(type && val) tags.push({type,id:val});
+    });
+    n.tags = tags;
+    if(!existing) store.notes.push(n);
+    save(store);
+    closeModal();
+    render();
+  }, existing ? ()=>{
+    store.notes = store.notes.filter(x=>x.id!==existing.id);
+    save(store);
+    render();
+  } : null);
 
   function addTagRow(tag){
     const div=document.createElement('div');
@@ -742,10 +787,10 @@ function openNoteForm(existing){
     const wrap=div.querySelector('.tagWrap');
     function populate(){
       const t=typeSel.value; wrap.innerHTML='';
-      if(t==='project') wrap.innerHTML=`<select class="tagValue"><option value="">—</option>${store.projects.map(p=>`<option value="${p.id}">${p.title}</option>`).join('')}</select>`;
-      else if(t==='shot') wrap.innerHTML=`<select class="tagValue"><option value="">—</option>${store.shots.map(s=>`<option value="${s.id}">${s.sequence||'SEQ'}/${s.scene||'SC'}/${s.shot||'SHOT'}</option>`).join('')}</select>`;
-      else if(t==='task') wrap.innerHTML=`<select class="tagValue"><option value="">—</option>${store.tasks.map(t=>`<option value="${t.id}">${t.title}</option>`).join('')}</select>`;
-      else if(t==='event') wrap.innerHTML=`<select class="tagValue"><option value="">—</option>${store.events.map(e=>`<option value="${e.id}">${e.title} (${e.date})</option>`).join('')}</select>`;
+      if(t==='project') wrap.innerHTML=`<select class="tagValue"><option value="">—</option>${store.projects.map(p=>`<option value="${p.id}">${escapeHTML(p.title)}</option>`).join('')}</select>`;
+      else if(t==='shot') wrap.innerHTML=`<select class="tagValue"><option value="">—</option>${store.shots.map(s=>`<option value="${s.id}">${escapeHTML(s.sequence||'SEQ')}/${escapeHTML(s.scene||'SC')}/${escapeHTML(s.shot||'SHOT')}</option>`).join('')}</select>`;
+      else if(t==='task') wrap.innerHTML=`<select class="tagValue"><option value="">—</option>${store.tasks.map(t=>`<option value="${t.id}">${escapeHTML(t.title)}</option>`).join('')}</select>`;
+      else if(t==='event') wrap.innerHTML=`<select class="tagValue"><option value="">—</option>${store.events.map(e=>`<option value="${e.id}">${escapeHTML(e.title)} (${e.date})</option>`).join('')}</select>`;
       else if(t==='date') wrap.innerHTML=`<input type="date" class="tagValue">`;
       if(tag && tag.type===t){ wrap.querySelector('.tagValue').value=tag.id; }
     }
@@ -770,18 +815,18 @@ function openNoteForm(existing){
       if(isNaN(pick)||!arr[pick]) return;
       id = arr[pick].id;
     }
-      if(id){ const ta=$('#nText'); ta.value += ` [[${type}:${id}]]`; }
-    };
-  }
+    if(id){ const ta=$('#nText'); ta.value += ` [[${type}:${id}]]`; }
+  };
+}
 
 function renderNotes(){
   const filterSel = $('#noteFilter');
   const val = filterSel.value;
   let opts = '<option value="all">All</option>';
-  if(store.projects.length) opts += '<optgroup label="Projects">'+store.projects.map(p=>`<option value="project:${p.id}">${p.title}</option>`).join('')+'</optgroup>';
-  if(store.shots.length) opts += '<optgroup label="Shots">'+store.shots.map(s=>`<option value="shot:${s.id}">${s.sequence||'SEQ'}/${s.scene||'SC'}/${s.shot||'SHOT'}</option>`).join('')+'</optgroup>';
-  if(store.tasks.length) opts += '<optgroup label="Tasks">'+store.tasks.map(t=>`<option value="task:${t.id}">${t.title}</option>`).join('')+'</optgroup>';
-  if(store.events.length) opts += '<optgroup label="Events">'+store.events.map(e=>`<option value="event:${e.id}">${e.title} (${e.date})</option>`).join('')+'</optgroup>';
+  if(store.projects.length) opts += '<optgroup label="Projects">'+store.projects.map(p=>`<option value="project:${p.id}">${escapeHTML(p.title)}</option>`).join('')+'</optgroup>';
+  if(store.shots.length) opts += '<optgroup label="Shots">'+store.shots.map(s=>`<option value="shot:${s.id}">${escapeHTML(s.sequence||'SEQ')}/${escapeHTML(s.scene||'SC')}/${escapeHTML(s.shot||'SHOT')}</option>`).join('')+'</optgroup>';
+  if(store.tasks.length) opts += '<optgroup label="Tasks">'+store.tasks.map(t=>`<option value="task:${t.id}">${escapeHTML(t.title)}</option>`).join('')+'</optgroup>';
+  if(store.events.length) opts += '<optgroup label="Events">'+store.events.map(e=>`<option value="event:${e.id}">${escapeHTML(e.title)} (${e.date})</option>`).join('')+'</optgroup>';
   filterSel.innerHTML = opts;
   filterSel.value = val==='all'||filterSel.querySelector(`option[value='${val}']`)?val:'all';
   const f = filterSel.value;
@@ -790,7 +835,7 @@ function renderNotes(){
   if(f!=='all'){ const [ft,fi] = f.split(':'); items = items.filter(n=>n.tags.some(t=>t.type===ft && t.id===fi)); }
   if(items.length===0){ list.innerHTML='<div class="card small">No notes yet. Tap <b>+ Note</b>.</div>'; return; }
   list.innerHTML = items.map(n=>`<div class="item card">
-      <div>${renderNoteText(n.text)}<div class="small">${n.tags.map(t=>getLabel(t.type,t.id)).join(', ')}</div></div>
+      <div>${renderNoteText(n.text)}<div class="small">${n.tags.map(t=>escapeHTML(getLabel(t.type,t.id))).join(', ')}</div></div>
       <div class="row" style="flex-direction:column;gap:8px">
         <button class="btn" onclick="openNoteForm(store.notes.find(x=>x.id==='${n.id}'))">Edit</button>
         <button class="btn" onclick="(store.notes=store.notes.filter(x=>x.id!=='${n.id}'), save(store), render())">Delete</button>
@@ -810,43 +855,154 @@ $('#btnImport').onclick=()=>$('#fileImport').click();
 $('#fileImport').addEventListener('change', (ev)=>{
   const file = ev.target.files[0]; if(!file) return;
   const reader = new FileReader();
-  reader.onload = ()=>{ try{ store = JSON.parse(reader.result); save(store); render(); } catch{ alert('Invalid file'); } };
+  reader.onload = ()=>{
+    try{
+      const parsed = JSON.parse(reader.result);
+      store = normalizeStore(parsed);
+      save(store); render();
+    } catch{ alert('Invalid file'); }
+  };
   reader.readAsText(file); ev.target.value='';
 });
 
 // ---------- Render all ----------
 function render(){ renderCalendar(); renderProjects(); renderStoryboards(); renderShots(); renderTasks(); renderNotes(); }
-function setupInstallPrompt(){
-  const KEY='installPromptLast';
+;(function installGate(){
+  const KEY='installModalDismissedAt';
   const WAIT=3*24*60*60*1000;
   const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
   if(standalone) return;
-  const last=parseInt(localStorage.getItem(KEY)||'0',10);
-  const due=Date.now()-last>WAIT;
-  const isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent);
-  if(isIOS){
-    if(due){
-      const banner=document.getElementById('installBanner');
-      banner.style.display='flex';
-      document.getElementById('installDismiss').onclick=()=>{
-        banner.style.display='none';
-        localStorage.setItem(KEY,Date.now());
-      };
-    }
-  }else{
-    window.addEventListener('beforeinstallprompt',e=>{
-      if(!due) return;
-      e.preventDefault();
-      e.prompt();
-      localStorage.setItem(KEY,Date.now());
-    },{once:true});
+  let deferredPrompt=null;
+  const modal=document.getElementById('installModal');
+  const instructions=document.getElementById('installInstructions');
+  const installBtn=document.getElementById('installNative');
+  function showPlatform(p){
+    instructions.querySelectorAll('[data-platform]').forEach(d=>{d.style.display=d.dataset.platform===p?'':'none';
   }
+  /* Re-render helpers */
+function render(){
+  renderCalendar();
+  renderProjects();
+  renderStoryboards();
+  renderShots();
+  renderTasks();
+  renderNotes();
 }
+
+/* PWA / Add-to-home-screen modal with multi-platform instructions */
+(function installGate(){
+  const KEY = 'installModalDismissedAt';
+  const WAIT = 3 * 24 * 60 * 60 * 1000; // 3 days
+
+  // If already running as standalone (PWA), don't show anything
+  const isStandalone =
+    window.matchMedia('(display-mode: standalone)').matches ||
+    window.navigator.standalone === true;
+
+  if (isStandalone) return;
+
+  let deferredPrompt = null;
+
+  const modal         = document.getElementById('installModal');
+  const instructions  = document.getElementById('installInstructions');
+  const installBtn    = document.getElementById('installNative');
+
+  function showPlatform(platform){
+    instructions
+      .querySelectorAll('[data-platform]')
+      .forEach(el => { el.style.display = el.dataset.platform === platform ? '' : 'none'; });
+  }
+
+  function detectDefaultPlatform(){
+    const ua = navigator.userAgent || '';
+    const isIOS     = /iPhone|iPad|iPod/i.test(ua);
+    const isAndroid = /Android/i.test(ua);
+    const isWindows = /Windows NT/i.test(ua);
+    if (isIOS) return 'ios';
+    if (isAndroid) return 'android';
+    if (isWindows) return 'windows';
+    // Fallback by browser
+    if (/Edg\//.test(ua))   return 'windows';
+    if (/Chrome\//.test(ua)) return isAndroid ? 'android' : 'windows';
+    return 'ios';
+  }
+
+  function openModal(){
+    modal.style.display = 'flex';
+    showPlatform(detectDefaultPlatform());
+    // Show native install button only if the browser fired beforeinstallprompt
+    installBtn.style.display = deferredPrompt ? '' : 'none';
+  }
+
+  function closeModal(){
+    modal.style.display = 'none';
+    localStorage.setItem(KEY, String(Date.now()));
+  }
+
+  // Platform toggle buttons
+  const btnIOS     = document.getElementById('install-ios');
+  const btnAndroid = document.getElementById('install-android');
+  const btnWin     = document.getElementById('install-windows');
+
+  if (btnIOS)     btnIOS.addEventListener('click',     () => showPlatform('ios'));
+  if (btnAndroid) btnAndroid.addEventListener('click', () => showPlatform('android'));
+  if (btnWin)     btnWin.addEventListener('click',     () => showPlatform('windows'));
+
+  // Modal open/close
+  const opener = document.getElementById('showInstall');
+  const closer = document.getElementById('installClose');
+  if (opener) opener.addEventListener('click', openModal);
+  if (closer) closer.addEventListener('click', closeModal);
+
+  // Native install flow (when browser supports it)
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    // If user already opened modal, reveal the button
+    if (modal.style.display === 'flex') installBtn.style.display = '';
+  });
+
+  if (installBtn) {
+    installBtn.addEventListener('click', async () => {
+      if (!deferredPrompt) {
+        closeModal();
+        return;
+      }
+      try {
+        deferredPrompt.prompt();
+        // outcome: 'accepted' | 'dismissed' (best-effort; some browsers changed API)
+        await deferredPrompt.userChoice?.catch(()=>{});
+      } finally {
+        deferredPrompt = null;
+        installBtn.style.display = 'none';
+        closeModal();
+      }
+    });
+  }
+
+  // If user installed via the browser UI, hide modal next time
+  window.addEventListener('appinstalled', () => {
+    localStorage.setItem(KEY, String(Date.now()));
+    if (modal.style.display === 'flex') closeModal();
+  });
+
+  // Respect snooze window
+  const lastDismiss = parseInt(localStorage.getItem(KEY) || '0', 10);
+  if (Number.isFinite(lastDismiss) && (Date.now() - lastDismiss) <= WAIT) return;
+
+  // Auto-open after grace period (or user can open via footer button)
+  // We won’t auto-open immediately to avoid being intrusive.
+  // Leave it to user via the footer button, but you can uncomment the next line to auto-show:
+  // openModal();
+})();
+
+/* Boot */
 function boot(){
   render();
-  setupInstallPrompt();
-  if('serviceWorker' in navigator){
-    window.addEventListener('load', ()=> navigator.serviceWorker.register('./sw.js').catch(console.error));
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(console.error);
+    });
   }
 }
 boot();
