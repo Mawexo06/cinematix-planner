@@ -64,6 +64,7 @@ textarea{min-height:90px;resize:vertical}
 #installModal .box{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:20px;max-width:320px;width:100%}
 #installModal .platforms{display:flex;justify-content:center;gap:14px;margin:10px 0}
 #installModal .platforms button{background:none;border:none;font-size:32px;cursor:pointer;color:var(--text)}
+#installModal .platforms button img{width:32px;height:32px}
 #installInstructions{font-size:14px;line-height:1.4}
 #installInstructions div{margin-top:8px}
 /* Modal */
@@ -183,8 +184,8 @@ textarea{min-height:90px;resize:vertical}
     <div class="title">Install</div>
     <div class="platforms">
       <button id="install-ios" aria-label="iOS"></button>
-      <button id="install-android" aria-label="Android">🤖</button>
-      <button id="install-windows" aria-label="Windows">🪟</button>
+      <button id="install-android" aria-label="Android"><img src="android-logo.png" alt="Android" width="32" height="32"></button>
+      <button id="install-windows" aria-label="Windows"><img src="windows-logo.png" alt="Windows" width="32" height="32"></button>
     </div>
     <div id="installInstructions">
       <div data-platform="ios">
